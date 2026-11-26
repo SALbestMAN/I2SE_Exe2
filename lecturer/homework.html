@@ -65,7 +65,7 @@
     <script src="../js/config.js?v=7.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../js/api-supabase.js?v=7.0"></script>
-    <script src="../js/ai.js?v=7.0"></script>
+    <script src="../js/ai.js?v=7.1"></script>
     <script src="../js/files.js?v=7.0"></script>
     <script src="../js/csv.js?v=7.0"></script>
     <script src="../js/printer.js?v=7.0"></script>
@@ -390,15 +390,61 @@
         // Who did the work, as the work itself says (the review reads the README, the title
         // page or the file headers): alone or a pair.
         // =============================================================================
-        function teamOf(rv) {
-          const t = rv?.team;
-          if (!t || (t.alone == null && !(t.names || []).length)) return null;
-          const names = (t.names || [])
-            .map((n) => String(n).trim())
-            .filter(Boolean);
-          if (t.alone === true && names.length <= 1)
-            return { alone: true, names, where: t.where || "" };
-          return { alone: false, names, where: t.where || "" };
+        // Who did the work: "Alone" for everyone, unless the work itself clearly names at
+        // least one other person who did it with them. Names that are really the same person
+        // ("aviya1221", "Aviya", "aviya1221 (repository owner)") count once. Names that also
+        // appear in the assignment (the lecturer, the course, a template's author) do not
+        // count, and neither does the student's own email name.
+        // =============================================================================
+        function same(p, k, stem) {
+          if (p.k.includes(k) || k.includes(p.k)) return true;
+          return (
+            p.stem.length >= 4 &&
+            stem.length >= 4 &&
+            (p.stem.startsWith(stem) || stem.startsWith(p.stem))
+          );
+        }
+        function teamOf(rv, a, email) {
+          const t = rv?.team || {};
+          const key = (n) =>
+            String(n || "")
+              .toLowerCase()
+              .replace(/\(.*?\)/g, " ")
+              .replace(/@.*/, "")
+              .replace(/[^\p{L}\p{N}]+/gu, "");
+          const known = key(
+            (a?.briefText || "") +
+              " " +
+              (a?.instructions || "") +
+              " " +
+              (a?.title || ""),
+          );
+          const me = key(email);
+          const people = [];
+          for (const raw of t.names || []) {
+            const name = String(raw)
+                .replace(/\(.*?\)/g, "")
+                .trim(),
+              k = key(name);
+            if (k.length < 3) continue;
+            if (k.length >= 5 && known.includes(k)) continue;
+            const stem = (name.toLowerCase().match(/\p{L}+/u) || [""])[0];
+            if (people.some((p) => same(p, k, stem))) continue;
+            people.push({ k, stem, name });
+          }
+          const meStem = (String(email || "")
+            .toLowerCase()
+            .match(/\p{L}+/u) || [""])[0];
+          const others = people.filter(
+            (p) => !(me && same({ k: me, stem: meStem }, p.k, p.stem)),
+          );
+          const together =
+            t.alone !== true && people.length >= 2 && others.length >= 1;
+          return {
+            alone: !together,
+            names: people.map((p) => p.name),
+            where: t.where || "",
+          };
         }
 
         // =============================================================================
@@ -479,7 +525,7 @@
           rows.forEach(
             (x) => (x.label = x.name || x.email.split("@")[0] || "Unnamed"),
           );
-          rows.forEach((x) => (x.team = teamOf(x.sub?.review)));
+          rows.forEach((x) => (x.team = teamOf(x.sub?.review, a, x.email)));
           rows.sort((x, y) => x.label.localeCompare(y.label, "he"));
           return rows;
         }
@@ -922,7 +968,7 @@
           return `<h1 dir="auto">${esc(r.label)}</h1>
       <p class="muted">${esc(r.email || "")}${r.group ? " · group " + esc(r.group) : ""}${r.link ? " · " + esc(r.link) : ""}</p>
       <h2>${API.totalOf(rv)} / ${maxOf(a)}</h2><p dir="auto">${esc(rv.summary || "")}</p>
-      ${r.team ? `<p dir="auto"><b>${r.team.alone ? "Done alone" : "Done together"}:</b> ${esc(r.team.names.join(", "))}</p>` : ""}
+      ${r.team ? `<p dir="auto"><b>${r.team.alone ? "Done alone" : "Done together"}${r.team.names.length ? ":" : ""}</b> ${esc(r.team.names.join(", "))}</p>` : ""}
       ${(rv.requirements || []).length ? `<h3>The assignment, point by point</h3><ul>${rv.requirements.map((q) => `<li dir="auto">${{ done: "✓", partial: "◐", missing: "✗" }[q.status] || "·"} ${esc(q.item)}${q.note ? ` <span class="muted">(${esc(q.note)})</span>` : ""}</li>`).join("")}</ul>` : ""}
       ${(rv.strengths || []).length ? `<h3>Good</h3>${li(rv.strengths)}` : ""}
       ${(rv.improvements || []).length ? `<h3>To improve</h3>${li(rv.improvements)}` : ""}
@@ -1270,7 +1316,7 @@
           ? `
         <p style="font:700 34px var(--display);line-height:1">${API.totalOf(rv)} <span class="muted" style="font-size:16px">/ ${maxOf(a)}</span></p>
         <p style="font-size:15px;line-height:1.55" dir="auto">${esc(rv.summary || "")}</p>
-        ${r.team ? `<p class="small" dir="auto"><b>${r.team.alone ? "Done alone" : "Done together"}:</b> ${r.team.names.length ? r.team.names.map(esc).join(", ") : "names not written"}${r.team.where ? ` <span class="muted">(${esc(r.team.where)})</span>` : ""}</p>` : `<p class="small muted">The work doesn't say who did it.</p>`}
+        ${r.team ? `<p class="small" dir="auto"><b>${r.team.alone ? "Done alone" : "Done together"}${r.team.names.length ? ":" : ""}</b> ${r.team.names.map(esc).join(", ")}${r.team.where ? ` <span class="muted">(${esc(r.team.where)})</span>` : ""}</p>` : `<p class="small muted">The work doesn't say who did it.</p>`}
         ${a.rubric.length > 1 ? rv.criteria.map((x) => `<div class="row" style="justify-content:space-between;gap:8px"><span class="small">${esc(x.name)}</span><b class="small">${x.score} / ${x.max}</b></div>`).join("") : ""}
         ${(rv.requirements || []).length ? `<div class="stack" style="gap:6px"><p class="label">The assignment, point by point</p>${rv.requirements.map((q) => `<div class="req-line ${esc(q.status)}" dir="auto"><b>${{ done: "✓", partial: "◐", missing: "✗" }[q.status] || "·"}</b><span>${esc(q.item)}${q.note ? `<em>${esc(q.note)}</em>` : ""}</span></div>`).join("")}</div>` : ""}
         ${(rv.strengths || []).length ? `<div class="stack" style="gap:4px"><p class="label">Good</p><ul class="plain-list">${rv.strengths.map((x) => `<li dir="auto">${esc(x)}</li>`).join("")}</ul></div>` : ""}
