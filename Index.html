@@ -1,0 +1,292 @@
+<!doctype html>
+<!-- =============================================================================
+     The sign-in page. The person chooses whether they are a student or a lecturer and
+     signs in with their Google account. Anyone already signed in goes straight to their
+     home page.
+     ============================================================================= -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <meta name="theme-color" content="#F3F0E8" />
+    <meta name="darkreader-lock" />
+    <title>Sign in</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Heebo:wght@400;500;600;700;800;900&family=Frank+Ruhl+Libre:wght@400;500;700&display=swap"
+    />
+    <link rel="stylesheet" href="css/style.css?v=7.0" />
+    <script src="js/i18n-strings.js?v=7.0"></script>
+    <script src="js/i18n.js?v=7.0"></script>
+    <link rel="expect" href="#page-end" blocking="render" />
+    <script>
+      // =============================================================================
+      // Runs before anything is drawn. When the person is coming back from Google, or is
+      // still signed in, the sign-in form is hidden and "Opening..." shows instead, so the
+      // form never flashes for a second.
+      // =============================================================================
+      try {
+        if (
+          /access_token|[?&]code=/.test(location.hash + location.search) ||
+          localStorage.getItem("lectureapp.session")
+        )
+          document.documentElement.classList.add("returning");
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <script>
+      // =============================================================================
+      // Runs before anything is drawn. When the person arrives from (or goes into) the live
+      // room, the curtain sheet is still covering the screen, so it is put back right away
+      // and the page never flashes in between. See js/curtain.js.
+      // =============================================================================
+      try {
+        var cpO = JSON.parse(sessionStorage.getItem("cp.curtain") || "null"),
+          cpN = (performance.getEntriesByType("navigation")[0] || {}).type,
+          cpD = document.body.classList.contains("dark-screen");
+        sessionStorage.removeItem("cp.curtain");
+        if (
+          !cpO &&
+          cpN === "back_forward" &&
+          cpD !== (sessionStorage.getItem("cp.fromDark") === "1")
+        )
+          cpO = { dir: "back", color: "blue" };
+        if (cpO) {
+          var cpC = document.createElement("div");
+          cpC.className =
+            "curtain " +
+            (cpO.color === "ink" ? "ink" : "blue") +
+            (cpO.dir === "back" ? " edge-left" : " edge-right");
+          cpC.setAttribute("aria-hidden", "true");
+          cpC.dataset.dir = cpO.dir;
+          cpC.dataset.mode = "slide";
+          document.body.prepend(cpC);
+        }
+      } catch (e) {}
+    </script>
+    <main class="signin">
+      <section class="signin-paper" aria-label="Welcome">
+        <span class="margin-line" aria-hidden="true"></span>
+        <span class="bookmark" aria-hidden="true"></span>
+        <div class="row" style="gap: 16px; position: relative">
+          <span class="logo" role="img" aria-label="Logo"
+            ><svg aria-hidden="true" width="14" height="18" viewBox="0 0 14 18">
+              <path d="M1 1h12v16l-6-4.5L1 17z" fill="currentColor" /></svg
+          ></span>
+          <span class="mono muted" id="today"></span>
+        </div>
+        <div style="position: relative">
+          <h1 class="signin-h1">Sign in</h1>
+          <div class="signin-h2">to your <span class="hl">class.</span></div>
+        </div>
+        <ol class="signin-steps">
+          <li>
+            <span class="mono">01</span>
+            <div>Check in <span class="serif">with two scans</span></div>
+          </li>
+          <li>
+            <span class="mono">02</span>
+            <div>Ask <span class="serif">without raising a hand</span></div>
+          </li>
+          <li>
+            <span class="mono">03</span>
+            <div>Read <span class="serif">every lecture's summary</span></div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="signin-form" aria-labelledby="form-h">
+        <div class="opening" aria-live="polite">
+          <span class="spinner" aria-hidden="true"></span>
+          <p class="mono muted">Signed in</p>
+          <h2>Opening <span class="serif">your shelf…</span></h2>
+        </div>
+        <div id="lang-slot"></div>
+        <div>
+          <div class="mono muted">Step 1 of 2</div>
+          <h2
+            id="form-h"
+            style="
+              margin-top: 10px;
+              font-size: 44px;
+              font-weight: 900;
+              letter-spacing: -0.045em;
+              line-height: 1;
+            "
+          >
+            Who's <span class="serif">signing in?</span>
+          </h2>
+        </div>
+        <div
+          role="radiogroup"
+          aria-label="Role"
+          class="stack"
+          style="gap: 10px"
+        >
+          <button
+            type="button"
+            class="role-card"
+            role="radio"
+            data-role="student"
+            aria-checked="true"
+          >
+            <span class="dot"></span
+            ><span
+              ><b>Student</b
+              ><span class="serif">check in, ask, catch up</span></span
+            >
+          </button>
+          <button
+            type="button"
+            class="role-card"
+            role="radio"
+            data-role="lecturer"
+            aria-checked="false"
+          >
+            <span class="dot"></span
+            ><span
+              ><b>Lecturer</b
+              ><span class="serif">run the room, read the room</span></span
+            >
+          </button>
+        </div>
+        <button type="button" class="google-btn" id="google-btn">
+          <svg
+            aria-hidden="true"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+          >
+            <path d="M20 12.2c0 4.6-3.2 7.8-8 7.8a8 8 0 1 1 5.4-13.9" />
+            <path d="M12 12h8" />
+          </svg>
+          Continue with Google
+        </button>
+        <p
+          style="
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--ink-2);
+            border-top: 1px dashed var(--line-3);
+            padding-top: 16px;
+          "
+          id="role-hint"
+        ></p>
+      </section>
+    </main>
+
+    <script src="js/config.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/api-supabase.js?v=7.0"></script>
+    <script src="js/ui.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+    <script src="js/curtain.js?v=7.0"></script>
+    <script src="js/motion.js?v=7.0"></script>
+    <script>
+      // =============================================================================
+      // The sign-in page's code: choosing the role, signing in with Google, and sending
+      // people who are already signed in straight to their home page.
+      // =============================================================================
+      $("#lang-slot").innerHTML = I18N.pickerHTML();
+
+      // =============================================================================
+      // The role the person picked (student by default).
+      // =============================================================================
+      let role = "student";
+      const hints = {
+        student:
+          "Use the Google account whose email is on your lecturer's course list. Not on it? You can still join with a code, and your lecturer approves it.",
+        lecturer:
+          "Create courses, plan sessions, bring in the student list and see who was there. Use your university Google account.",
+      };
+      setText(
+        $("#today"),
+        new Date()
+          .toLocaleDateString("en-GB", {
+            weekday: "short",
+            day: "2-digit",
+            month: "2-digit",
+          })
+          .replace(",", "")
+          .replace("/", ".") +
+          " · " +
+          semester(),
+      );
+
+      // =============================================================================
+      // Marks the chosen role (student or lecturer) on the two big buttons.
+      // =============================================================================
+      function setRole(r) {
+        role = r;
+        $all("[data-role]").forEach((x) => {
+          x.setAttribute("aria-checked", String(x.dataset.role === r));
+          x.tabIndex = x.dataset.role === r ? 0 : -1;
+        });
+        setText($("#role-hint"), hints[r]);
+      }
+      $all("[data-role]").forEach((b) =>
+        b.addEventListener("click", () => setRole(b.dataset.role)),
+      );
+
+      // =============================================================================
+      // The arrow keys move between the two role buttons, like in any radio group.
+      // =============================================================================
+      $("[role=radiogroup]").addEventListener("keydown", (e) => {
+        if (
+          !["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(e.key)
+        )
+          return;
+        e.preventDefault();
+        setRole(role === "student" ? "lecturer" : "student");
+        $(`[data-role=${role}]`).focus();
+      });
+      setRole("student");
+
+      // =============================================================================
+      // Opens the home page of this role: the course shelf for a lecturer, the home page for
+      // a student.
+      // =============================================================================
+      const goHome = (r) =>
+        location.replace(
+          r === "lecturer" ? "lecturer/courses.html" : "student/home.html",
+        );
+
+      if (!API.ready) {
+        $("#google-btn").disabled = true;
+        toast("Can't reach the database. Check your connection and reload.");
+      } else {
+        // =============================================================================
+        // "Continue with Google": starts the Google sign-in with the chosen role.
+        // =============================================================================
+        $("#google-btn").addEventListener("click", async () => {
+          $("#google-btn").disabled = true;
+          try {
+            await API.signInWithGoogle(role);
+          } catch (e) {
+            toast(e.message);
+            $("#google-btn").disabled = false;
+          }
+        });
+
+        // =============================================================================
+        // Back from Google, or already signed in: go straight in.
+        // =============================================================================
+        (async () => {
+          const back = await API.finishGoogleSignIn().catch(() => null);
+          if (back) return goHome(back.role);
+          document.documentElement.classList.remove("returning");
+        })();
+      }
+    </script>
+    <span id="page-end" hidden></span>
+  </body>
+</html>
