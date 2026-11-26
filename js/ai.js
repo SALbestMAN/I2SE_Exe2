@@ -814,7 +814,7 @@ Write the whole summary in ${lang}. ${
  "improvements": [string] (ONLY about requirements that are partial or missing; [] if everything is done),
  "tips": [string] (max 2 optional ideas that are NOT required by the assignment; they never lower the grade),
  "approach": string (1 sentence on HOW they solved it, no names),
- "team": {"alone": true | false | null (null when the work doesn't say), "names": [string] (every author named in the work: README, docs, file headers, the document's title page; full names or GitHub users exactly as written), "where": string (where it says so, e.g. "README, top")}}
+ "team": {"alone": true | false (false ONLY when the work clearly says it was done by two or more different people, e.g. "submitted by X and Y", two names on the title page, "partner: Y"; a single author, a repository owner, or no names at all means true), "names": [string] (the students who did THIS work, as written in the work; one person written two ways, such as a full name and a GitHub user, is listed once; never the lecturer, the course staff, the university, or the authors of a template, library or example), "where": string (where it says so, e.g. "README, top")}}
 WRITING RULES: simple everyday English, short sentences, no long lists of file paths or function names, no markdown.`;
 
   // =============================================================================
