@@ -814,7 +814,7 @@ Write the whole summary in ${lang}. ${
  "improvements": [string] (ONLY about requirements that are partial or missing; [] if everything is done),
  "tips": [string] (max 2 optional ideas that are NOT required by the assignment; they never lower the grade),
  "approach": string (1 sentence on HOW they solved it, no names),
- "team": {"alone": true | false (false ONLY when the work clearly says it was done by two or more different people, e.g. "submitted by X and Y", two names on the title page, "partner: Y"; a single author, a repository owner, or no names at all means true), "names": [string] (the students who did THIS work, as written in the work; one person written two ways, such as a full name and a GitHub user, is listed once; never the lecturer, the course staff, the university, or the authors of a template, library or example), "where": string (where it says so, e.g. "README, top")}}
+ "team": {"names": [string] (fill this ONLY when the work was clearly done by two or more different students together: their names as written in the work, e.g. "submitted by X and Y", two names on the title page, "partner: Y", or two or more different people under PEOPLE WHO COMMITTED below. Otherwise []: one student, one name, or no names at all. One person written two ways, such as a full name and a GitHub user, is listed once. Never list the lecturer, the course staff, the university, AI tools such as Claude or Copilot, or the authors of a template, library or example), "where": string (where you saw it, e.g. "README, top" or "repository commits"; "" when names is [])}}
 WRITING RULES: simple everyday English, short sentences, no long lists of file paths or function names, no markdown.`;
 
   // =============================================================================
@@ -955,14 +955,70 @@ WRITING RULES: simple everyday English, short sentences, no long lists of file p
   }
 
   // =============================================================================
+  // The people who wrote commits in a GitHub repository (the last 100 commits, one
+  // call), the same people GitHub lists as contributors. Commits that aren't linked to
+  // a GitHub account are skipped, and so are AI helpers and bots (Claude, Copilot...).
+  // =============================================================================
+  const peopleCache = new Map();
+  const BOT =
+    /\[bot\]|^(claude|claudecode|copilot|githubcopilot|github|githubactions|actionsuser|webflow|dependabot|codex|cursor|cursoragent|devin|chatgpt|openai|gemini)$/i;
+  const BOT_MAIL = /@(anthropic|openai)\.com$|^noreply@github\.com$/i;
+  async function repoPeople(url) {
+    const r = parseRepo(url);
+    if (!r) return [];
+    const key = `${r.owner}/${r.repo}`.toLowerCase();
+    if (!peopleCache.has(key))
+      peopleCache.set(
+        key,
+        (async () => {
+          const res = await fetch(
+            `https://api.github.com/repos/${r.owner}/${r.repo}/commits?per_page=100${r.ref !== "HEAD" ? "&sha=" + encodeURIComponent(r.ref) : ""}`,
+            { headers: { Accept: "application/vnd.github+json" } },
+          );
+          if (!res.ok) {
+            peopleCache.delete(key);
+            return [];
+          }
+          const seen = new Map();
+          for (const c of await res.json()) {
+            const login = c.author?.login || "",
+              name = c.commit?.author?.name || "",
+              mail = c.commit?.author?.email || "";
+            const flat = (x) => x.replace(/[^a-z0-9]/gi, "");
+            if (
+              c.author?.type === "Bot" ||
+              BOT.test(flat(login)) ||
+              BOT.test(flat(name)) ||
+              BOT_MAIL.test(mail)
+            )
+              continue;
+            const id = login.toLowerCase();
+            if (!id) continue;
+            const p = seen.get(id) || { login, name: "", commits: 0 };
+            if (name && name !== login && !p.name) p.name = name;
+            p.commits++;
+            seen.set(id, p);
+          }
+          return [...seen.values()];
+        })().catch(() => {
+          peopleCache.delete(key);
+          return [];
+        }),
+      );
+    return peopleCache.get(key);
+  }
+
+  // =============================================================================
   // Reviews one student's work: the assignment (its PDF text and requirements), the
   // student's file or text, and their GitHub repository. The AI grades against the
   // requirements written in the assignment itself.
   // =============================================================================
   async function reviewSubmission(assignment, { text, file, link }, onStep) {
     let repo = null,
-      repoNote = "";
+      repoNote = "",
+      people = [];
     if (link && parseRepo(link)) {
+      people = await repoPeople(link);
       try {
         repo = await fetchRepo(link, onStep, 70000);
       } catch (e) {
@@ -984,6 +1040,17 @@ ${REVIEW_SHAPE}`;
           repo.text
         : "",
       repoNote,
+      people.length
+        ? "PEOPLE WHO COMMITTED TO THE REPOSITORY: " +
+          people
+            .map(
+              (p) =>
+                (p.name
+                  ? `${p.name} (${p.login || "no GitHub user"})`
+                  : p.login) + `, ${p.commits} commits`,
+            )
+            .join("; ")
+        : "",
       link && !repo ? "Link the student gave: " + link : "",
     ]
       .filter(Boolean)
@@ -1003,6 +1070,7 @@ ${REVIEW_SHAPE}`;
     if (!res || typeof res !== "object")
       throw fail("Gemini's review wasn't in the expected format. Try again.");
     shapeReview(assignment, res);
+    res.people = people;
     res.repo = repo
       ? { name: repo.name, files: repo.files, total: repo.total }
       : null;
@@ -1286,5 +1354,6 @@ Return JSON only: {"verdict": "copied" | "similar" | "independent", "why": strin
     similarWork,
     repoText,
     judgePair,
+    repoPeople,
   };
 })();
