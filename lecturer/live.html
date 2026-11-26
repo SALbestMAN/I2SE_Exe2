@@ -1,0 +1,2484 @@
+<!doctype html>
+<!-- =============================================================================
+     The live room: the page the lecturer shows on the projector during a lecture. It
+     shows the animated attendance code with the live count, runs the second check,
+     polls, students' questions, slides with drawing, and a whiteboard. When the lecture
+     ends, the lecturer chooses what to keep for the class.
+     ============================================================================= -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <meta name="theme-color" content="#F3F0E8" />
+    <meta name="darkreader-lock" />
+    <title>Live check-in</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Heebo:wght@400;500;600;700;800;900&family=Frank+Ruhl+Libre:wght@400;500;700&display=swap"
+    />
+    <link rel="stylesheet" href="../css/style.css?v=7.0" />
+    <script src="../js/i18n-strings.js?v=7.0"></script>
+    <script src="../js/i18n.js?v=7.0"></script>
+    <link rel="expect" href="#page-end" blocking="render" />
+  </head>
+  <body class="dark-screen">
+    <script>
+      // =============================================================================
+      // Runs before anything is drawn. When the person arrives from (or goes into) the live
+      // room, the curtain sheet is still covering the screen, so it is put back right away
+      // and the page never flashes in between. See js/curtain.js.
+      // =============================================================================
+      try {
+        var cpO = JSON.parse(sessionStorage.getItem("cp.curtain") || "null"),
+          cpN = (performance.getEntriesByType("navigation")[0] || {}).type,
+          cpD = document.body.classList.contains("dark-screen");
+        sessionStorage.removeItem("cp.curtain");
+        if (
+          !cpO &&
+          cpN === "back_forward" &&
+          cpD !== (sessionStorage.getItem("cp.fromDark") === "1")
+        )
+          cpO = { dir: "back", color: "blue" };
+        if (cpO) {
+          var cpC = document.createElement("div");
+          cpC.className =
+            "curtain " +
+            (cpO.color === "ink" ? "ink" : "blue") +
+            (cpO.dir === "back" ? " edge-left" : " edge-right");
+          cpC.setAttribute("aria-hidden", "true");
+          cpC.dataset.dir = cpO.dir;
+          cpC.dataset.mode = "slide";
+          document.body.prepend(cpC);
+        }
+      } catch (e) {}
+    </script>
+    <div class="projector">
+      <div class="projector-bar">
+        <div class="row wrap" style="gap: 22px">
+          <div class="ttl">
+            <b id="course-name" dir="auto"></b
+            ><span class="serif" id="course-meta"></span>
+          </div>
+          <div class="view-tabs" role="tablist" aria-label="Projector view">
+            <button role="tab" data-view="checkin" aria-selected="true">
+              Check-in
+            </button>
+            <button role="tab" data-view="poll" aria-selected="false">
+              Poll
+            </button>
+            <button role="tab" data-view="questions" aria-selected="false">
+              Questions<span class="badge hidden" id="q-badge"></span>
+            </button>
+            <button role="tab" data-view="slides" aria-selected="false">
+              Slides
+            </button>
+            <button role="tab" data-view="board" aria-selected="false">
+              Board
+            </button>
+          </div>
+        </div>
+        <div class="row wrap" style="gap: 8px">
+          <span class="state-chip" id="state-chip"></span>
+          <button type="button" class="btn btn-warn hidden" id="att-pause">
+            Pause
+          </button>
+          <button type="button" class="btn btn-primary hidden" id="att-resume">
+            Resume
+          </button>
+          <button type="button" class="btn btn-stop hidden" id="att-stop">
+            Stop attendance
+          </button>
+          <button type="button" class="btn btn-primary" id="end-btn">
+            End session
+          </button>
+          <a
+            class="icon-btn"
+            id="back-btn"
+            aria-label="Back to the course"
+            style="border: 1px solid var(--dark-line-2); color: var(--on-dark)"
+          ></a>
+        </div>
+      </div>
+
+      <!-- =============================================================================
+       Poll: the lecturer writes a question and answers; results fill in live.
+       ============================================================================= -->
+      <div class="projector-body hidden" data-panel="poll">
+        <form
+          class="stack"
+          style="width: 100%; max-width: 640px; gap: 14px"
+          id="poll-create"
+        >
+          <h2 style="font-size: 28px">New poll</h2>
+          <label class="sr-only" for="pq">Question</label>
+          <input
+            class="dark-input"
+            id="pq"
+            placeholder="Question, e.g. Which diagram shows the order of calls?"
+            maxlength="160"
+            dir="auto"
+          />
+          <div class="stack" style="gap: 8px">
+            <input
+              class="dark-input popt"
+              placeholder="Answer A"
+              maxlength="80"
+              dir="auto"
+              aria-label="Answer A"
+            />
+            <input
+              class="dark-input popt"
+              placeholder="Answer B"
+              maxlength="80"
+              dir="auto"
+              aria-label="Answer B"
+            />
+            <input
+              class="dark-input popt"
+              placeholder="Answer C (optional)"
+              maxlength="80"
+              dir="auto"
+              aria-label="Answer C"
+            />
+            <input
+              class="dark-input popt"
+              placeholder="Answer D (optional)"
+              maxlength="80"
+              dir="auto"
+              aria-label="Answer D"
+            />
+          </div>
+          <div class="row wrap" style="gap: 12px">
+            <label class="row small" style="gap: 8px; color: var(--dark-muted)"
+              >Time limit
+              <select
+                class="dark-input"
+                id="pdur"
+                style="width: auto; height: 40px"
+              >
+                <option value="30">30 s</option>
+                <option value="60" selected>1 min</option>
+                <option value="120">2 min</option>
+                <option value="0">No limit</option>
+              </select></label
+            >
+            <label class="row small" style="gap: 8px; color: var(--dark-muted)"
+              ><input
+                type="checkbox"
+                id="phide"
+                checked
+                style="width: 18px; height: 18px"
+              />Show results only after it closes</label
+            >
+            <button class="btn btn-primary btn-lg" style="margin-left: auto">
+              Start poll
+            </button>
+          </div>
+        </form>
+
+        <div
+          class="stack hidden"
+          style="width: 100%; max-width: 820px; gap: 18px"
+          id="poll-live"
+        >
+          <p
+            class="small"
+            style="font-weight: 600; color: var(--dark-muted)"
+            id="pmeta"
+          ></p>
+          <h2
+            style="font-size: 36px; line-height: 1.2"
+            id="pqtext"
+            dir="auto"
+          ></h2>
+          <div class="stack" style="gap: 14px" id="pbars"></div>
+          <div class="row wrap" style="gap: 10px">
+            <button type="button" class="btn btn-primary" id="pclose">
+              Close poll
+            </button>
+            <button type="button" class="btn btn-ghost" id="pnew">
+              New poll
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- =============================================================================
+       Slides: shown here and on the students' phones; deleted when the lecture ends.
+       ============================================================================= -->
+      <div
+        class="projector-body hidden"
+        data-panel="slides"
+        style="flex-direction: column; flex-wrap: nowrap; gap: 18px"
+      >
+        <label class="deck-drop" id="deck-drop" for="deck-file">
+          <span class="mono" style="font-size: 11px; color: var(--on-dark-2)"
+            >Slides for this lecture</span
+          >
+          <span
+            style="
+              font-size: clamp(30px, 3.4vw, 48px);
+              font-weight: 900;
+              letter-spacing: -0.04em;
+              line-height: 1.05;
+            "
+            >Drop your slides
+            <span class="serif" style="font-weight: 400; color: var(--hl)"
+              >here.</span
+            ></span
+          >
+          <span style="color: var(--on-dark-2); max-width: 560px"
+            >PDF works best: you can draw on it and students follow your slide.
+            PowerPoint, Word and Excel files and pictures work too. Students on
+            the course list see it on their phones. When you end the lecture you
+            choose whether to download it with your drawings or share it with
+            the class.</span
+          >
+          <span class="btn btn-hl btn-lg" style="margin-top: 6px"
+            >Choose a file</span
+          >
+          <input
+            type="file"
+            id="deck-file"
+            class="sr-only"
+            accept=".pdf,.pptx,.ppt,.docx,.doc,.xlsx,.xls,.png,.jpg,.jpeg,.webp,application/pdf,image/*"
+          />
+        </label>
+        <div class="deck-view hidden" id="deck-view">
+          <div id="deck-tools"></div>
+          <div class="deck-stage" id="deck-stage">
+            <div class="deck-sheet" id="deck-sheet">
+              <canvas id="deck-canvas" aria-label="Current slide"></canvas
+              ><canvas
+                class="ink-layer"
+                id="deck-ink"
+                aria-hidden="true"
+              ></canvas>
+            </div>
+            <iframe
+              class="deck-office hidden"
+              id="deck-office"
+              title="Presentation"
+              allowfullscreen
+            ></iframe>
+            <button
+              type="button"
+              class="deck-hit prev"
+              id="deck-prev"
+              aria-label="Previous slide"
+            ></button>
+            <button
+              type="button"
+              class="deck-hit next"
+              id="deck-next"
+              aria-label="Next slide"
+            ></button>
+          </div>
+          <div class="row wrap deck-bar">
+            <span
+              class="mono"
+              style="font-size: 12px; color: var(--on-dark-2)"
+              id="deck-name"
+            ></span>
+            <button
+              type="button"
+              class="btn btn-ghost deck-nav"
+              id="deck-back"
+              aria-label="Previous slide"
+            >
+              ‹
+            </button>
+            <span class="mono deck-count" id="deck-count"></span>
+            <button
+              type="button"
+              class="btn btn-ghost deck-nav"
+              id="deck-fwd"
+              aria-label="Next slide"
+            >
+              ›
+            </button>
+            <span
+              class="mono"
+              style="font-size: 11px; color: var(--on-dark-2)"
+              id="deck-sync"
+            ></span>
+            <span style="flex: 1"></span>
+            <button type="button" class="btn btn-ghost" id="deck-full">
+              Full screen
+            </button>
+            <label class="btn btn-ghost" for="deck-file">Replace</label>
+            <button type="button" class="btn btn-ghost" id="deck-remove">
+              Remove
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- =============================================================================
+       Whiteboard: pages to write on, kept in this browser during the lecture.
+       ============================================================================= -->
+      <div
+        class="projector-body hidden"
+        data-panel="board"
+        style="flex-direction: column; flex-wrap: nowrap; gap: 14px"
+      >
+        <div id="board-tools"></div>
+        <div class="deck-stage board-stage" id="board-stage">
+          <div class="deck-sheet board-sheet" id="board-sheet">
+            <canvas
+              class="ink-layer"
+              id="board-ink"
+              aria-label="Whiteboard"
+            ></canvas>
+          </div>
+        </div>
+        <div class="row wrap deck-bar">
+          <span class="mono" style="font-size: 12px; color: var(--on-dark-2)"
+            >Whiteboard</span
+          >
+          <button
+            type="button"
+            class="btn btn-ghost deck-nav"
+            id="board-back"
+            aria-label="Previous page"
+          >
+            ‹
+          </button>
+          <span class="mono deck-count" id="board-count">1 / 1</span>
+          <button
+            type="button"
+            class="btn btn-ghost deck-nav"
+            id="board-fwd"
+            aria-label="Next page"
+          >
+            ›
+          </button>
+          <button type="button" class="btn btn-ghost" id="board-add">
+            + New page
+          </button>
+          <span style="flex: 1"></span>
+          <button type="button" class="btn btn-ghost" id="board-full">
+            Full screen
+          </button>
+        </div>
+      </div>
+
+      <!-- =============================================================================
+       Ending the lecture: what to keep for the class (slides with drawings, the
+       whiteboard).
+       ============================================================================= -->
+      <dialog class="ask" id="end-dlg" aria-labelledby="end-h">
+        <form method="dialog" class="stack" style="gap: 16px; padding: 26px">
+          <h2 id="end-h" style="font-size: 24px">End this lecture?</h2>
+          <p class="muted" style="font-size: 14px">
+            Check-in closes for good and you go to the attendance sheet.
+          </p>
+          <fieldset class="end-keep hidden" id="end-slides">
+            <legend id="end-slides-h">Slides</legend>
+            <label class="row" style="gap: 10px"
+              ><input type="checkbox" class="check" id="end-sl-dl" />
+              <span id="end-sl-dl-t">Download with my drawings</span></label
+            >
+            <label class="row" style="gap: 10px"
+              ><input type="checkbox" class="check" id="end-sl-share" /> Share
+              with the students (they can download it)</label
+            >
+          </fieldset>
+          <fieldset class="end-keep hidden" id="end-board">
+            <legend id="end-board-h">Whiteboard</legend>
+            <label class="row" style="gap: 10px"
+              ><input type="checkbox" class="check" id="end-bd-dl" /> Download
+              as PDF</label
+            >
+            <label class="row" style="gap: 10px"
+              ><input type="checkbox" class="check" id="end-bd-share" /> Share
+              with the students</label
+            >
+          </fieldset>
+          <p
+            class="small"
+            id="end-note"
+            style="color: var(--blue); min-height: 18px"
+          ></p>
+          <!-- =============================================================================
+           The files, ready: a click saves each one.
+           ============================================================================= -->
+          <div class="stack hidden" style="gap: 8px" id="end-files"></div>
+          <div class="row" style="gap: 10px; justify-content: flex-end">
+            <button class="btn" value="cancel" id="end-cancel">Cancel</button>
+            <button class="btn btn-dark" value="ok" id="end-ok">
+              End lecture
+            </button>
+          </div>
+        </form>
+      </dialog>
+
+      <!-- =============================================================================
+       Questions from the students, most upvoted first.
+       ============================================================================= -->
+      <div
+        class="projector-body hidden"
+        data-panel="questions"
+        style="align-items: flex-start"
+      >
+        <div class="stack" style="width: 100%; max-width: 900px; gap: 12px">
+          <div class="row" style="justify-content: space-between">
+            <h2 style="font-size: 28px">Questions from the class</h2>
+            <span style="color: var(--dark-muted)" id="qcount"></span>
+          </div>
+          <div class="stack" style="gap: 10px" id="qlist"></div>
+        </div>
+      </div>
+
+      <!-- =============================================================================
+       Check-in: the animated code, the live count and the second check.
+       ============================================================================= -->
+      <div class="projector-body" data-panel="checkin">
+        <div
+          class="stack"
+          style="flex: 1 1 480px; align-items: center; gap: 26px; min-width: 0"
+        >
+          <div class="code-stage">
+            <canvas
+              id="code"
+              role="img"
+              aria-label="Animated attendance code, changes several times per second"
+            ></canvas>
+          </div>
+          <p
+            style="
+              font-size: clamp(30px, 3.2vw, 46px);
+              font-weight: 800;
+              letter-spacing: -0.04em;
+              line-height: 1.15;
+              text-align: center;
+            "
+            id="code-title"
+          ></p>
+          <!-- =============================================================================
+           The one place attendance starts: under the code, far from the second-check buttons.
+           ============================================================================= -->
+          <button
+            type="button"
+            class="btn btn-primary btn-xl hidden"
+            id="att-start"
+          >
+            Start attendance
+          </button>
+          <p
+            class="mono"
+            style="
+              font-size: 12px;
+              color: var(--on-dark-2);
+              text-align: center;
+              margin-top: -12px;
+            "
+            id="join-line"
+          ></p>
+        </div>
+
+        <div
+          class="stack"
+          style="flex: 1 1 420px; max-width: 620px; min-width: 0; gap: 22px"
+        >
+          <div class="mono" style="font-size: 12px; color: var(--on-dark-2)">
+            Checked in
+          </div>
+          <div class="big-count" dir="ltr">
+            <span id="count">0</span><small>/<span id="total">0</span></small>
+          </div>
+          <div
+            class="row"
+            style="gap: 14px"
+            role="progressbar"
+            aria-label="Checked in"
+            id="bar-wrap"
+          >
+            <span class="mono" style="font-size: 11px; color: var(--dark-muted)"
+              >0</span
+            >
+            <div class="bar" style="flex: 1">
+              <div id="bar" style="width: 0%"></div>
+            </div>
+            <span class="mono" style="font-size: 11px; color: var(--dark-muted)"
+              >100%</span
+            >
+          </div>
+          <p
+            class="mono"
+            style="font-size: 11px; color: var(--d-danger); margin-top: -10px"
+            id="blocked-line"
+          ></p>
+
+          <div class="recheck-banner" id="recheck">
+            <span id="clock-icon" style="flex: none; margin-top: 2px"></span>
+            <div style="flex: 1">
+              <p
+                style="font-size: 19px; font-weight: 700"
+                id="recheck-title"
+              ></p>
+              <p
+                style="
+                  font-size: 15px;
+                  color: var(--on-dark-2);
+                  margin-top: 4px;
+                "
+                id="recheck-sub"
+              ></p>
+              <!-- =============================================================================
+               How the second check starts: with a button, in N minutes, or at a clock time.
+               ============================================================================= -->
+              <div
+                class="stack hidden"
+                style="gap: 12px; margin-top: 16px"
+                id="recheck-actions"
+              >
+                <p
+                  class="mono"
+                  style="font-size: 11px; color: var(--on-dark-2)"
+                >
+                  Starts
+                </p>
+                <div
+                  class="seg seg-dark"
+                  role="group"
+                  aria-label="When the second check starts"
+                  id="rc-when"
+                  style="grid-template-columns: repeat(3, minmax(0, 1fr))"
+                >
+                  <button type="button" data-when="now" aria-pressed="true">
+                    With a button
+                  </button>
+                  <button type="button" data-when="in" aria-pressed="false">
+                    In … minutes
+                  </button>
+                  <button type="button" data-when="at" aria-pressed="false">
+                    At a time
+                  </button>
+                </div>
+                <label
+                  class="row hidden"
+                  style="gap: 10px; align-items: center"
+                  id="rc-in-row"
+                  ><input
+                    type="number"
+                    class="input input-dark"
+                    id="rc-in"
+                    min="1"
+                    max="240"
+                    value="20"
+                    style="width: 96px"
+                    aria-label="Minutes from now"
+                  /><span style="color: var(--on-dark-2)"
+                    >minutes from now</span
+                  ></label
+                >
+                <label
+                  class="row hidden"
+                  style="gap: 10px; align-items: center"
+                  id="rc-at-row"
+                  ><input
+                    type="time"
+                    class="input input-dark"
+                    id="rc-at"
+                    style="width: 140px"
+                    aria-label="Start time"
+                  /><span style="color: var(--on-dark-2)">today</span></label
+                >
+                <p
+                  class="mono"
+                  style="font-size: 11px; color: var(--on-dark-2)"
+                >
+                  Students have
+                </p>
+                <div
+                  class="seg seg-dark"
+                  role="group"
+                  aria-label="How long students have to scan"
+                  id="rc-window"
+                  style="grid-template-columns: repeat(5, minmax(0, 1fr))"
+                >
+                  <button type="button" data-w="30" aria-pressed="false">
+                    30 s
+                  </button>
+                  <button type="button" data-w="60" aria-pressed="true">
+                    1 min
+                  </button>
+                  <button type="button" data-w="120" aria-pressed="false">
+                    2 min
+                  </button>
+                  <button type="button" data-w="180" aria-pressed="false">
+                    3 min
+                  </button>
+                  <button type="button" data-w="300" aria-pressed="false">
+                    5 min
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-hl btn-lg"
+                  id="recheck-now"
+                  style="font-weight: 700; align-self: flex-start"
+                >
+                  Start second check
+                </button>
+                <p
+                  class="small"
+                  style="color: var(--on-dark-2)"
+                  id="rc-hint"
+                ></p>
+              </div>
+              <!-- =============================================================================
+               A planned second check: start it early, or call it off.
+               ============================================================================= -->
+              <div
+                class="row wrap hidden"
+                style="gap: 8px; margin-top: 16px"
+                id="recheck-plan"
+              >
+                <button
+                  type="button"
+                  class="btn btn-hl"
+                  id="rc-start-now"
+                  style="font-weight: 700"
+                >
+                  Start now
+                </button>
+                <button type="button" class="btn btn-ghost" id="rc-cancel">
+                  Cancel the plan
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="stack hidden" style="gap: 8px" id="req-box">
+            <p
+              class="mono"
+              style="font-size: 11px; color: var(--on-dark-2)"
+              id="req-head"
+            >
+              Asked to be marked present
+            </p>
+            <div class="stack" style="gap: 8px" id="req-list"></div>
+          </div>
+
+          <div
+            class="stack"
+            style="
+              gap: 8px;
+              border-top: 1px solid rgba(243, 240, 232, 0.12);
+              padding-top: 16px;
+            "
+          >
+            <p class="mono" style="font-size: 11px; color: var(--on-dark-2)">
+              Just arrived
+            </p>
+            <div class="stack" style="gap: 8px" id="recent"></div>
+          </div>
+          <p
+            class="mono"
+            style="font-size: 10px; color: var(--dark-muted); line-height: 1.8"
+            id="ctx-line"
+          >
+            Detecting class network and location…
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <script src="../js/config.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/api-supabase.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    <script src="../js/frames.js?v=7.0"></script>
+    <script src="../js/files.js?v=7.0"></script>
+    <script src="../js/ink.js?v=7.0"></script>
+    <script src="../js/ui.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+    <script src="../js/curtain.js?v=7.0"></script>
+    <script src="../js/motion.js?v=7.0"></script>
+    <script>
+      // =============================================================================
+      // The live room's code. It finds the lecture, shows the animated code, keeps the
+      // numbers fresh, and runs the polls, questions, slides, whiteboard and the end of the
+      // lecture.
+      // =============================================================================
+      (async () => {
+        requireRole("lecturer");
+
+        // =============================================================================
+        // "Live room" in the left column opens this page without a course, so it finds the
+        // course whose lecture is live.
+        // =============================================================================
+        let course;
+        if (!param("course")) {
+          const list = await API.listCourses();
+          const found = (
+            await Promise.all(
+              list.map(async (c) => ({ c, s: await API.activeSession(c.id) })),
+            )
+          ).find((x) => x.s);
+          if (!found) {
+            $all(".projector-body").forEach((x) => x.classList.add("hidden"));
+            $(".projector-bar").innerHTML =
+              `<div class="ttl"><b>Live room</b></div><a class="icon-btn" href="courses.html" aria-label="Back to the courses" style="border:1px solid var(--dark-line-2)">${icon("close", 16, "currentColor", 2.2)}</a>`;
+
+            // =============================================================================
+            // No lecture is live: says so, with a link back to the courses.
+            // =============================================================================
+            $(".projector").insertAdjacentHTML(
+              "beforeend",
+              `<div class="projector-body" style="flex-direction:column;align-items:center;text-align:center;gap:18px">
+        <p style="font-size:clamp(36px,5vw,64px);font-weight:900;letter-spacing:-0.05em;line-height:1">No lecture <span class="serif" style="font-weight:400;color:var(--hl)">is live.</span></p>
+        <p style="color:var(--on-dark-2);max-width:420px">Open a course and press Start lecture. This room fills up the moment you do.</p>
+        <a class="btn btn-primary btn-lg" href="courses.html">Back to the courses</a></div>`,
+            );
+            bootDone();
+            return;
+          }
+          history.replaceState(
+            null,
+            "",
+            `live.html?course=${found.c.code}&session=${found.s.id}`,
+          );
+          course = await getCourse();
+        } else course = await getCourse();
+        if (!course) {
+          location.href = "courses.html";
+          return;
+        }
+
+        // =============================================================================
+        // Which lecture: the one in the address (from the course page), else the live one,
+        // else a new one started now.
+        // =============================================================================
+        const session = param("session")
+          ? await API.startSession(param("session"))
+          : (await API.activeSession(course.id)) ||
+            (await API.quickSession(course.id));
+        const sid = session.id;
+        history.replaceState(
+          null,
+          "",
+          `live.html?course=${course.code}&session=${sid}`,
+        );
+        $("#back-btn").innerHTML = icon("close", 16, "currentColor", 2.2);
+        $("#back-btn").href = `course.html?course=${course.code}`;
+
+        // =============================================================================
+        // How often the numbers refresh.
+        // =============================================================================
+        const SLOW = API.isRemote ? 2000 : 1000;
+
+        setText($("#course-name"), course.name);
+        setText(
+          $("#course-meta"),
+          `${session.title.replace(/^Lecture (\d+)$/, (m, n) => "lecture " + pad2(n))}, ${session.mode === "online" ? "online" : (course.schedule || []).filter((x) => x.place && !isOnlinePlace(x.place)).length === 1 ? "room " + course.schedule.find((x) => x.place && !isOnlinePlace(x.place)).place : "in class"}`,
+        );
+        $("#join-line").innerHTML =
+          `Join code <b dir="ltr" style="color:var(--on-dark);letter-spacing:.2em">${esc(course.code)}</b> · refreshes ${1000 / API.RULES.FRAME_MS}× a second`;
+        $("#clock-icon").innerHTML = icon("clock", 24, "var(--hl)");
+
+        // =============================================================================
+        // The big line above the code: how to check in, or "scan again now" during the second
+        // check.
+        // =============================================================================
+        const TITLES = {
+          scan: 'Open the course on your phone,<br>tap <span class="serif" style="color:var(--hl)">Check in.</span>',
+          second:
+            'Second check: <span class="serif" style="color:#A3B1FF">scan again now.</span>',
+        };
+
+        // =============================================================================
+        // Changes the big line above the code (only when it is different).
+        // =============================================================================
+        const setTitle = (k) => {
+          const h = TITLES[k] || esc(k);
+          if ($("#code-title")._k !== h) {
+            $("#code-title")._k = h;
+            $("#code-title").innerHTML = h;
+          }
+        };
+
+        // =============================================================================
+        // The checks this lecture uses (Wi-Fi, location, second check), for the line under the
+        // code.
+        // =============================================================================
+        const checksText = () =>
+          [
+            session.checkWifi && "Wi-Fi",
+            session.checkLocation && "location",
+            session.secondCheck && "second check",
+          ].filter(Boolean);
+        if (!session.checkWifi && !session.checkLocation) {
+          setText(
+            $("#ctx-line"),
+            `${session.mode === "online" ? "Online session" : "Code only"}${session.secondCheck ? ", with a second check" : ""}`,
+          );
+        } else if (!session.ctx.ip && session.ctx.lat == null) {
+          // =============================================================================
+          // Saves the class network and the lecturer's location (only for the checks this
+          // lecture uses).
+          // =============================================================================
+          getCheckContext().then(async (ctx) => {
+            const r = await API.setSessionContext(
+              sid,
+              session.checkLocation ? ctx : { loc: null },
+            );
+            showCtx(r?.ip, ctx.loc);
+          });
+        } else showCtx(session.ctx.ip, session.ctx.lat != null);
+
+        // =============================================================================
+        // Shows which checks are ready (network saved, location saved).
+        // =============================================================================
+        function showCtx(ip, loc) {
+          const parts = [];
+          if (session.checkWifi)
+            parts.push(ip ? "Class network saved" : "Network unknown");
+          if (session.checkLocation)
+            parts.push(
+              loc
+                ? "Location saved"
+                : "Location not available. Allow it and reload.",
+            );
+          // Translates a short text when the page is not in English.
+          const tt = (x) => (window.I18N ? I18N.t(x) : x);
+          setText(
+            $("#ctx-line"),
+            `${tt("Checking")} ${checksText().map(tt).join(", ")}. ${parts.map(tt).join(". ")}.`,
+          );
+        }
+
+        // =============================================================================
+        // Attendance is opened, paused and stopped by the lecturer, whenever and as often as
+        // they like. This is its state, and whether it was ever opened.
+        // =============================================================================
+        let checkin = session.checkin,
+          everOpened = !!session.openedAt;
+
+        // =============================================================================
+        // Shows the attendance buttons and the code for the current state: open (code moving),
+        // paused, or closed.
+        // =============================================================================
+        function showCheckin() {
+          const open = checkin === "open",
+            paused = checkin === "paused";
+          $("#att-start").classList.toggle("hidden", checkin !== "closed");
+          setText(
+            $("#att-start"),
+            everOpened ? "Open attendance again" : "Start attendance",
+          );
+          $("#att-pause").classList.toggle("hidden", !open);
+          $("#att-resume").classList.toggle("hidden", !paused);
+          $("#att-stop").classList.toggle("hidden", checkin === "closed");
+          $("#att-start").classList.toggle("btn-primary", !everOpened);
+          $("#att-start").classList.toggle("btn-ghost", everOpened);
+          if (lastStats) showRecheck(lastStats);
+          $("#state-chip").innerHTML = open
+            ? "Attendance open"
+            : paused
+              ? "Attendance paused"
+              : "Attendance closed";
+          $("#state-chip").className =
+            "state-chip" + (open ? " open" : paused ? " paused" : "");
+          const stage = $(".code-stage");
+          stage.classList.toggle("is-paused", !open);
+          stage.dataset.msg = paused
+            ? "⏸  Paused"
+            : open
+              ? ""
+              : everOpened
+                ? "Attendance closed"
+                : "Not started";
+          if (!open)
+            setTitle(
+              paused
+                ? "Attendance is paused"
+                : everOpened
+                  ? "Attendance is closed"
+                  : "Attendance hasn't started yet",
+            );
+          else if (!lastStats?.recheck.active) setTitle("scan");
+        }
+
+        // =============================================================================
+        // Every change the lecturer makes raises this number. A refresh that started before
+        // the change carries the old state, so it may update the counts but not the attendance
+        // state. This stops the buttons from jumping back.
+        // =============================================================================
+        let changeNo = 0;
+
+        // =============================================================================
+        // Opens, pauses or stops attendance, right away on screen and then on the server.
+        // =============================================================================
+        async function setCheckin(state) {
+          changeNo++;
+          $all("#att-start, #att-pause, #att-resume, #att-stop").forEach(
+            (b) => (b.disabled = true),
+          );
+          try {
+            const r = await API.setCheckin(sid, state);
+            changeNo++;
+            checkin = r.checkin;
+            everOpened = everOpened || !!r.opened_at;
+            queue = [];
+            showCheckin();
+            render(true);
+          } finally {
+            $all("#att-start, #att-pause, #att-resume, #att-stop").forEach(
+              (b) => (b.disabled = false),
+            );
+          }
+        }
+        $("#att-start").addEventListener("click", () => setCheckin("open"));
+        $("#att-resume").addEventListener("click", () => setCheckin("open"));
+        $("#att-pause").addEventListener("click", () => setCheckin("paused"));
+        $("#att-stop").addEventListener("click", () => setCheckin("closed"));
+        showCheckin();
+
+        // =============================================================================
+        // The animated code. The laptop signs the frames itself with the lecture's key
+        // (fetched once), so the code keeps changing 5 times a second even on a weak
+        // connection. These hold the frames waiting to be shown, the next frame number, and
+        // the clock difference.
+        // =============================================================================
+        let queue = [],
+          nextN = 1,
+          fetching = false,
+          ended = false,
+          shown = null,
+          clockOffset = 0;
+        let key = null,
+          hmac = null,
+          keyAt = 0,
+          keyBusy = false,
+          logBuf = [],
+          logBusy = false,
+          lastTick = 0;
+        const canSign = !!(
+          window.crypto &&
+          crypto.subtle &&
+          window.TextEncoder
+        );
+
+        // =============================================================================
+        // Gets (or refreshes) the lecture's signing key and the server's clock. If the
+        // connection drops for a moment, it keeps signing with the key it has.
+        // =============================================================================
+        async function loadKey() {
+          if (keyBusy || ended) return;
+          keyBusy = true;
+          try {
+            const k = await API.frameKey(sid);
+            if (k.ended) {
+              ended = true;
+              return;
+            }
+            if (!hmac || !key || key.secret !== k.secret)
+              hmac = await crypto.subtle.importKey(
+                "raw",
+                new TextEncoder().encode(k.secret),
+                { name: "HMAC", hash: "SHA-256" },
+                false,
+                ["sign"],
+              );
+            key = k;
+            keyAt = Date.now();
+            try {
+              sessionStorage.setItem("cp.fk." + sid, JSON.stringify(k));
+            } catch {}
+          } catch (e) {
+          } finally {
+            keyBusy = false;
+          }
+        }
+
+        // =============================================================================
+        // Signs one frame with the lecture's key (HMAC-SHA256), the same way the database
+        // checks it.
+        // =============================================================================
+        async function sign(body) {
+          const b = new Uint8Array(
+            await crypto.subtle.sign(
+              "HMAC",
+              hmac,
+              new TextEncoder().encode(body),
+            ),
+          );
+          let h = "";
+          for (let i = 0; i < 6; i++) h += b[i].toString(16).padStart(2, "0");
+          return h;
+        }
+
+        // =============================================================================
+        // Which check a frame belongs to at time t: 1, or 2 while the second check is open.
+        // =============================================================================
+        function roundAt(t) {
+          const r = lastStats?.recheck;
+          const startedAt = r?.startedAt ?? key?.recheckStarted;
+          const win = (r?.window ?? key?.recheckWindow ?? 60) * 1000;
+          return startedAt && t >= startedAt && t < startedAt + win ? 2 : 1;
+        }
+
+        // =============================================================================
+        // Every 40 ms: when a new 200 ms slot begins, makes the frame for it, draws it, and
+        // keeps it for the frames log.
+        // =============================================================================
+        async function tickLocal() {
+          if (!key || !hmac || checkin !== "open") return;
+          const t = Math.floor(API.now() / 200) * 200;
+          if (t === lastTick) return;
+          lastTick = t;
+          const n = Math.max(1, Math.floor((t - key.started) / 200) + 1);
+          const rnd = roundAt(t);
+          const body = `CP1|${key.short}|${rnd}|${n}|${t}`;
+          const raw = body + "|" + (await sign(body));
+          if (t !== lastTick) return;
+          FRAMES.draw($("#code"), raw);
+          FRAMES.broadcast(raw);
+          logBuf.push({ n, round: rnd, t, raw });
+          if (logBuf.length > 1500) logBuf.splice(0, logBuf.length - 1500);
+        }
+
+        // =============================================================================
+        // Sends the frames shown so far to the server for the frames log, a few seconds at a
+        // time.
+        // =============================================================================
+        async function flushLog() {
+          if (logBusy || !logBuf.length || ended) return;
+          logBusy = true;
+          const batch = logBuf.slice(0, 200);
+          try {
+            await API.logFrames(sid, batch);
+            logBuf.splice(0, batch.length);
+          } catch (e) {
+          } finally {
+            logBusy = false;
+          }
+        }
+
+        // =============================================================================
+        // For browsers that cannot sign (no secure connection): fetches ready-signed frames
+        // from the server instead.
+        // =============================================================================
+        async function refill() {
+          if (fetching || ended) return;
+          fetching = true;
+          try {
+            const t0 = Date.now();
+            const r = await API.getFrames(sid, nextN, 15);
+            if (r.ended) {
+              ended = true;
+              return;
+            }
+            if (r.closed) return;
+            clockOffset = r.now - (t0 + Date.now()) / 2;
+            queue = queue.filter((f) => f.t < r.frames[0].t).concat(r.frames);
+            nextN += r.frames.length;
+          } catch (e) {
+          } finally {
+            fetching = false;
+          }
+        }
+        if (canSign) {
+          // =============================================================================
+          // When the page can sign, it starts with the key saved in this tab (so the code shows
+          // at once), then refreshes it.
+          // =============================================================================
+          try {
+            const k = JSON.parse(
+              sessionStorage.getItem("cp.fk." + sid) || "null",
+            );
+            if (k?.secret) {
+              key = k;
+              crypto.subtle
+                .importKey(
+                  "raw",
+                  new TextEncoder().encode(k.secret),
+                  { name: "HMAC", hash: "SHA-256" },
+                  false,
+                  ["sign"],
+                )
+                .then((h) => {
+                  hmac = hmac || h;
+                });
+            }
+          } catch {}
+          loadKey();
+          setInterval(tickLocal, 40);
+          setInterval(() => {
+            if (Date.now() - keyAt > 30000) loadKey();
+          }, 5000);
+          setInterval(flushLog, 4000);
+          addEventListener("pagehide", flushLog);
+        } else {
+          // =============================================================================
+          // Without signing: shows the server's frames at the right moments and fetches more
+          // before they run out.
+          // =============================================================================
+          setInterval(() => {
+            const serverNow = Date.now() + clockOffset;
+            queue = queue.filter((f) => f.t > serverNow - 1000);
+            let cur = null;
+            for (const f of queue) if (f.t <= serverNow) cur = f;
+            if (cur && cur !== shown) {
+              shown = cur;
+              FRAMES.draw($("#code"), cur.raw);
+              FRAMES.broadcast(cur.raw);
+            }
+            if (
+              checkin === "open" &&
+              queue.filter((f) => f.t > serverNow).length < 6
+            )
+              refill();
+          }, 40);
+        }
+
+        // =============================================================================
+        // One refresh at a time; a refresh asked for meanwhile runs right after.
+        // =============================================================================
+        // =============================================================================
+        // The latest numbers from the server, also used by showCheckin().
+        // =============================================================================
+        var lastStats = null;
+        let statsBusy = false,
+          again = false;
+
+        // =============================================================================
+        // Refreshes the live numbers: how many checked in, the second check, blocked attempts,
+        // the latest arrivals. Starts a planned second check when its time comes.
+        // =============================================================================
+        async function render(soon) {
+          if (statsBusy) {
+            if (soon) again = true;
+            return;
+          }
+          statsBusy = true;
+          const myChange = changeNo;
+          let st;
+          try {
+            st = await API.sessionStats(sid);
+          } finally {
+            statsBusy = false;
+          }
+          if (again) {
+            again = false;
+            setTimeout(() => render(), 0);
+          }
+          if (!st) return;
+          if (myChange !== changeNo) return;
+          lastStats = st;
+          setText($("#total"), st.rosterSize);
+          setText($("#count"), st.checkedIn);
+          $("#bar").style.width = st.rosterSize
+            ? `${Math.min(100, (st.checkedIn / st.rosterSize) * 100)}%`
+            : "0%";
+          setText(
+            $("#blocked-line"),
+            st.blocked
+              ? `${st.blocked} blocked attempt${st.blocked > 1 ? "s" : ""}`
+              : "",
+          );
+          $("#bar-wrap").setAttribute("aria-valuenow", st.checkedIn);
+          $("#bar-wrap").setAttribute("aria-valuemax", st.rosterSize);
+
+          setHTML(
+            $("#recent"),
+            st.arrivals.length
+              ? st.arrivals
+                  .slice(0, 4)
+                  .map(
+                    (a) => `
+      <div class="row" style="gap:12px">
+        <span class="avatar" style="width:32px;height:32px;font-size:12px;background:var(--dark-3);color:var(--on-dark)">${esc(initials(a.name))}</span>
+        <span style="flex:1;font-size:17px" dir="auto">${esc(a.name)}${a.round === 2 ? ' <span class="mono" style="font-size:10px;color:#A3B1FF">· second check</span>' : ""}</span>
+        <span class="mono" style="font-size:11px;color:var(--dark-muted)">${fmtTime(a.time)}</span>
+      </div>`,
+                  )
+                  .join("")
+              : '<p class="serif" style="font-size:26px;color:var(--dark-muted)">Nobody yet, the room is warming up.</p>',
+          );
+          if (st.session.endedAt) {
+            if (!endDone) location.replace(`course.html?course=${course.code}`);
+            return;
+          }
+          if (st.session.checkin !== checkin) {
+            checkin = st.session.checkin;
+            everOpened = everOpened || !!st.session.openedAt;
+            showCheckin();
+          }
+
+          showRecheck(st);
+        }
+
+        // =============================================================================
+        // The second check. Not planned: the lecturer chooses when (a button after stopping
+        // the first check, in N minutes, or at a clock time). Planned: a countdown, then it
+        // starts by itself. Open: a timer, then it closes by itself. These flags make sure
+        // each step happens only once.
+        // =============================================================================
+        let autoClosed = false,
+          recheckSeenActive = false,
+          autoStarting = false;
+
+        // =============================================================================
+        // Milliseconds as m:ss for the countdowns.
+        // =============================================================================
+        const mmss = (ms) => {
+          const t = Math.max(0, Math.ceil(ms / 1000));
+          return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+        };
+
+        // =============================================================================
+        // Shows the second check's banner and buttons for where it stands: not planned,
+        // planned (countdown), open (timer), or done.
+        // =============================================================================
+        function showRecheck(st) {
+          const r = st.recheck,
+            banner = $("#recheck");
+          const started = !!r.startedAt,
+            active = started && r.active && checkin !== "closed",
+            done = started && !active;
+          const planned = !started && !!r.plannedAt;
+          const choosing = !started && !planned;
+          if (active) recheckSeenActive = true;
+          banner.classList.toggle(
+            "active",
+            active ||
+              planned ||
+              (choosing && checkin === "closed" && everOpened),
+          );
+          $("#recheck-actions").classList.toggle("hidden", !choosing);
+          $("#recheck-plan").classList.toggle("hidden", !planned);
+          if (active) {
+            setTitle("second");
+            setHTML(
+              $("#recheck-title"),
+              'Second check <span class="serif">is on</span>',
+            );
+            setText(
+              $("#recheck-sub"),
+              `${Math.max(0, Math.ceil((r.endsAt - API.now()) / 1000))} seconds left, ${st.secondCheck} of ${st.checkedIn} scanned`,
+            );
+          } else if (done) {
+            if (
+              checkin === "open" &&
+              !r.active &&
+              recheckSeenActive &&
+              !autoClosed
+            ) {
+              autoClosed = true;
+              setCheckin("closed");
+            }
+            setHTML(
+              $("#recheck-title"),
+              'Second check <span class="serif">is done</span>',
+            );
+            setText(
+              $("#recheck-sub"),
+              `${st.secondCheck} of ${st.checkedIn} passed the second check`,
+            );
+          } else if (planned) {
+            const left = r.plannedAt - API.now();
+            setHTML(
+              $("#recheck-title"),
+              'Second check in <span class="serif" id="rc-left"></span>',
+            );
+            setText($("#rc-left"), mmss(left));
+            setText(
+              $("#recheck-sub"),
+              `Starts by itself at ${fmtTime(r.plannedAt).slice(0, 5)} (keep this page open). Students get ${fmtLen(r.window)}.`,
+            );
+            if (left <= 0 && !autoStarting) startSecond();
+          } else {
+            const ready = checkin === "closed" && everOpened;
+            setHTML(
+              $("#recheck-title"),
+              ready
+                ? 'Ready for the <span class="serif">second check</span>'
+                : 'Second <span class="serif">check</span>',
+            );
+            setText(
+              $("#recheck-sub"),
+              ready
+                ? "Everyone who checked in scans the code again. Students who don't count as partial."
+                : "Start it with a button once you stop attendance, or set it to start by itself.",
+            );
+            showWhen();
+          }
+        }
+
+        // =============================================================================
+        // A length of time in words ("45 seconds", "1 minute", "2 minutes").
+        // =============================================================================
+        const fmtLen = (sec) =>
+          sec < 60
+            ? `${sec} seconds`
+            : sec === 60
+              ? "1 minute"
+              : `${sec / 60} minutes`;
+
+        // =============================================================================
+        // Starts the second check: opens attendance again for the chosen number of seconds.
+        // =============================================================================
+        async function startSecond() {
+          autoStarting = true;
+          changeNo++;
+          try {
+            await API.startRecheck(sid);
+            changeNo++;
+            autoClosed = false;
+            recheckSeenActive = true;
+            checkin = "open";
+            showCheckin();
+            setView("checkin");
+            await render(true);
+          } catch (e) {
+            toast("The second check didn't start: " + (e.message || e));
+          } finally {
+            autoStarting = false;
+          }
+        }
+        setInterval(() => {
+          if (lastStats?.recheck.plannedAt && !lastStats.recheck.startedAt)
+            showRecheck(lastStats);
+        }, 1000);
+        render().finally(() => bootDone());
+        setInterval(render, SLOW);
+
+        // =============================================================================
+        // Students who could not check in ask to be marked present; the lecturer decides here.
+        // True while the list is loading.
+        // =============================================================================
+        let reqBusy = false;
+
+        // =============================================================================
+        // The requests to be marked present for this lecture, with Approve and Refuse buttons.
+        // =============================================================================
+        async function renderRequests() {
+          if (reqBusy) return;
+          reqBusy = true;
+          let all;
+          try {
+            all = await API.listAttendanceRequests(course.id).catch(() => []);
+          } finally {
+            reqBusy = false;
+          }
+          const list = all.filter(
+            (q) => q.sessionId === sid && q.status === "pending",
+          );
+          $("#req-box").classList.toggle("hidden", !list.length);
+          setText($("#req-head"), `${list.length} asked to be marked present`);
+          setHTML(
+            $("#req-list"),
+            list
+              .map(
+                (q) => `
+      <div class="req-card">
+        <div class="row" style="gap:10px; align-items:flex-start">
+          <span style="flex:1; min-width:0"><b dir="auto">${esc(q.name || q.email)}</b>${q.group ? `<span class="small" style="color:var(--dark-muted)">, group ${esc(q.group)}</span>` : ""}
+            <span class="small" style="display:block; color:var(--on-dark-2); margin-top:2px; text-align:left" dir="auto">${esc(q.reason)}</span></span>
+          <span class="small" style="color:var(--dark-muted)">${fmtTime(q.createdAt).slice(0, 5)}</span>
+        </div>
+        <div class="row" style="gap:8px; justify-content:flex-end">
+          <button type="button" class="btn btn-ghost" data-decide="${q.id}" data-ok="0">Decline</button>
+          <button type="button" class="btn btn-primary" data-decide="${q.id}" data-ok="1">Mark present</button>
+        </div>
+      </div>`,
+              )
+              .join(""),
+          );
+        }
+
+        // =============================================================================
+        // Approves or refuses a request.
+        // =============================================================================
+        $("#req-list").addEventListener("click", async (e) => {
+          const b = e.target.closest("[data-decide]");
+          if (!b) return;
+          b.closest(".req-card")
+            .querySelectorAll("button")
+            .forEach((x) => (x.disabled = true));
+          const res = await API.decideAttendanceRequest(
+            b.dataset.decide,
+            b.dataset.ok === "1",
+          );
+          if (res && !res.ok) toast(res.error);
+          else
+            toast(b.dataset.ok === "1" ? "Marked present" : "Request declined");
+          renderRequests();
+          render();
+        });
+        renderRequests();
+        setInterval(renderRequests, SLOW * 2);
+
+        // =============================================================================
+        // Which tab is showing: check-in, poll, questions, slides or board.
+        // =============================================================================
+        let view = "checkin";
+
+        // =============================================================================
+        // Switches to another tab.
+        // =============================================================================
+        function setView(v) {
+          view = v;
+          $all(".view-tabs [data-view]").forEach((b) =>
+            b.setAttribute("aria-selected", String(b.dataset.view === v)),
+          );
+          $all("[data-panel]").forEach((p) =>
+            p.classList.toggle("hidden", p.dataset.panel !== v),
+          );
+          renderExtras();
+        }
+        $all(".view-tabs [data-view]").forEach((b) =>
+          b.addEventListener("click", () => setView(b.dataset.view)),
+        );
+
+        // =============================================================================
+        // Poll: whether to show the results while the poll is still open, and whether the "new
+        // poll" form is open.
+        // =============================================================================
+        let showResultsWhileOpen = false,
+          creatingNew = false;
+
+        // =============================================================================
+        // Starts a new poll from the form.
+        // =============================================================================
+        $("#poll-create").addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const res = await API.createPoll(
+            course.id,
+            $("#pq").value,
+            $all(".popt").map((i) => i.value),
+            Number($("#pdur").value),
+          );
+          if (!res.ok) return toast(res.error);
+          showResultsWhileOpen = !$("#phide").checked;
+          creatingNew = false;
+          e.target.reset();
+          $("#phide").checked = !showResultsWhileOpen;
+          renderExtras();
+        });
+        $("#pclose").addEventListener("click", async () => {
+          const p = await API.currentPoll(course.id);
+          if (p) await API.closePoll(p.id);
+          renderExtras();
+        });
+        $("#pnew").addEventListener("click", () => {
+          creatingNew = true;
+          renderExtras();
+        });
+
+        // =============================================================================
+        // Shows the current poll with live results, or the form for a new one.
+        // =============================================================================
+        async function renderPoll() {
+          const p = await API.currentPoll(course.id);
+          const showForm = !p || creatingNew;
+          $("#poll-create").classList.toggle("hidden", !showForm);
+          $("#poll-live").classList.toggle("hidden", showForm);
+          if (showForm) {
+            if (p && p.open) creatingNew = false;
+            return;
+          }
+          const reveal = !p.open || showResultsWhileOpen;
+          setText(
+            $("#pmeta"),
+            (p.open ? "Live poll" : "Poll closed") +
+              (p.secondsLeft != null
+                ? `, ${Math.floor(p.secondsLeft / 60)}:${String(p.secondsLeft % 60).padStart(2, "0")} left`
+                : "") +
+              `, ${p.total} answer${p.total === 1 ? "" : "s"}`,
+          );
+          setText($("#pqtext"), p.question);
+          const max = Math.max(1, ...p.counts);
+          setHTML(
+            $("#pbars"),
+            p.options
+              .map((o, i) => {
+                const pct = p.total
+                  ? Math.round((p.counts[i] / p.total) * 100)
+                  : 0;
+                return `<div class="pbar">
+        <span style="font-size:20px" dir="auto"><b style="color:var(--dark-muted);margin-right:10px">${"ABCD"[i]}</b>${esc(o)}</span>
+        <span style="font:700 20px var(--display)">${reveal ? `${pct}%` : ""}</span>
+        <div class="track"><div style="width:${reveal ? (p.counts[i] / max) * 100 : 0}%;${reveal && p.counts[i] === max && p.total ? "background:var(--d-ok)" : ""}"></div></div>
+      </div>`;
+              })
+              .join(""),
+          );
+          $("#pclose").classList.toggle("hidden", !p.open);
+        }
+
+        // =============================================================================
+        // The students' questions, most upvoted first, with buttons to mark them answered and
+        // to jump to the slide a question is about.
+        // =============================================================================
+        async function renderQuestions() {
+          const list = await API.listComments(
+            course.id,
+            API.getSession().email,
+          );
+          const open = list.filter((c) => !c.answered).length;
+          setText($("#q-badge"), open);
+          $("#q-badge").classList.toggle("hidden", !open);
+          if (view !== "questions") {
+            renderQuestions.last = null;
+            return;
+          }
+          const sig = JSON.stringify(list);
+          if (sig === renderQuestions.last) return;
+          renderQuestions.last = sig;
+          setText($("#qcount"), `${open} open, ${list.length - open} answered`);
+          $("#qlist").innerHTML = list.length
+            ? list
+                .map(
+                  (c) => `
+      <div class="qcard" style="${c.answered ? "opacity:.55" : ""}">
+        <div class="votes">${c.votes}<div class="small" style="font:500 11px var(--font);color:var(--dark-muted)">votes</div></div>
+        <div style="flex:1;min-width:0">
+          <p style="font-size:20px;line-height:1.4" dir="auto">${questionTextHTML(c.text, { button: true })}</p>
+          <p class="small" style="color:var(--dark-muted);margin-top:6px" dir="auto">${esc(c.author)}, ${fmtTime(c.createdAt).slice(0, 5)}</p>
+          ${c.reply ? `<p style="margin-top:10px;padding-left:12px;border-left:2px solid var(--dark-line);color:var(--on-dark-2)" dir="auto">${esc(c.reply)}</p>` : ""}
+        </div>
+        <div class="stack" style="gap:6px">
+          <button class="btn btn-ghost" style="min-height:36px" data-answer="${c.id}" data-val="${!c.answered}">${c.answered ? "Reopen" : "Answered ✓"}</button>
+          <button class="btn btn-ghost" style="min-height:36px" data-hide="${c.id}">Hide</button>
+        </div>
+      </div>`,
+                )
+                .join("")
+            : `<p style="color:var(--dark-muted)">No questions yet. Students ask from their phones.</p>`;
+          $all("[data-answer]").forEach((b) =>
+            b.addEventListener("click", async () => {
+              await API.setCommentState(b.dataset.answer, {
+                answered: b.dataset.val === "true",
+              });
+              renderExtras();
+            }),
+          );
+          $all("[data-hide]").forEach((b) =>
+            b.addEventListener("click", async () => {
+              if (
+                await ask({
+                  title: "Hide this message?",
+                  message:
+                    "It disappears from the screen and from students' phones.",
+                  confirm: "Hide message",
+                  danger: true,
+                })
+              ) {
+                await API.setCommentState(b.dataset.hide, { hidden: true });
+                renderExtras();
+              }
+            }),
+          );
+        }
+
+        // =============================================================================
+        // Whether the second check was open at the last refresh.
+        // =============================================================================
+        let recheckWasActive = false;
+        let extrasBusy = false;
+
+        // =============================================================================
+        // Refreshes the poll, the questions and the requests. When the second check opens, it
+        // switches back to the check-in tab so the code is on screen.
+        // =============================================================================
+        async function renderExtras() {
+          if (extrasBusy) return;
+          extrasBusy = true;
+          try {
+            await Promise.all([renderPoll(), renderQuestions()]);
+          } finally {
+            extrasBusy = false;
+          }
+          const active = lastStats?.recheck.active;
+          if (active && !recheckWasActive && view !== "checkin")
+            setView("checkin");
+          recheckWasActive = !!active;
+        }
+        renderExtras();
+        setInterval(renderExtras, SLOW);
+
+        // =============================================================================
+        // The second-check choices: how long it stays open, and when it starts (now, in N
+        // minutes, or at a time).
+        // =============================================================================
+        let rcWindow = 60,
+          rcWhen = "now";
+
+        // =============================================================================
+        // How long the second check stays open.
+        // =============================================================================
+        $all("#rc-window button").forEach((btn) =>
+          btn.addEventListener("click", () => {
+            rcWindow = +btn.dataset.w;
+            $all("#rc-window button").forEach((x) =>
+              x.setAttribute("aria-pressed", String(x === btn)),
+            );
+          }),
+        );
+
+        // =============================================================================
+        // When the second check starts.
+        // =============================================================================
+        $all("#rc-when button").forEach((btn) =>
+          btn.addEventListener("click", () => {
+            rcWhen = btn.dataset.when;
+            $all("#rc-when button").forEach((x) =>
+              x.setAttribute("aria-pressed", String(x === btn)),
+            );
+            if (rcWhen === "at" && !$("#rc-at").value) {
+              const d = new Date(API.now() + 20 * 60000);
+              $("#rc-at").value =
+                `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+            }
+            showWhen();
+          }),
+        );
+
+        // =============================================================================
+        // Shows the field that goes with the choice (minutes, or a clock time).
+        // =============================================================================
+        function showWhen() {
+          $("#rc-in-row").classList.toggle("hidden", rcWhen !== "in");
+          $("#rc-at-row").classList.toggle("hidden", rcWhen !== "at");
+          const needStop = rcWhen === "now" && checkin !== "closed";
+          $("#recheck-now").textContent =
+            rcWhen === "now" ? "Start second check" : "Plan the second check";
+          $("#recheck-now").disabled = needStop;
+          setText(
+            $("#rc-hint"),
+            needStop
+              ? "Stop attendance first: the button works once the first check is done."
+              : "",
+          );
+        }
+
+        // =============================================================================
+        // When the planned second check starts, in server time.
+        // =============================================================================
+        function plannedTime() {
+          if (rcWhen === "in") {
+            const m = Math.round(+$("#rc-in").value);
+            return m >= 1 && m <= 240 ? API.now() + m * 60000 : null;
+          }
+          const [h, mi] = ($("#rc-at").value || "").split(":").map(Number);
+          if (!Number.isFinite(h)) return null;
+          const d = new Date(API.now());
+          d.setHours(h, mi, 0, 0);
+          return d.getTime();
+        }
+
+        // =============================================================================
+        // Starts the second check now, or plans it for later.
+        // =============================================================================
+        $("#recheck-now").addEventListener("click", async () => {
+          if (rcWhen === "now") {
+            if (
+              !(await ask({
+                title: "Start the second check?",
+                message: `The code opens again for ${fmtLen(rcWindow)}, then closes by itself. Everyone who already checked in scans again.`,
+                confirm: "Start second check",
+              }))
+            )
+              return;
+            $("#recheck-now").disabled = true;
+            try {
+              await API.setRecheck(sid, { mode: "manual", window: rcWindow });
+              await startSecond();
+            } finally {
+              $("#recheck-now").disabled = false;
+            }
+            return;
+          }
+          const at = plannedTime();
+          if (!at)
+            return toast(
+              rcWhen === "in"
+                ? "Enter how many minutes (1–240)"
+                : "Choose a time",
+            );
+          if (at <= API.now() + 30000)
+            return toast("That time has already passed. Choose a later one.");
+          $("#recheck-now").disabled = true;
+          try {
+            await API.setRecheck(sid, { mode: "at", at, window: rcWindow });
+            toast(`Second check planned for ${fmtTime(at).slice(0, 5)}`);
+            await render(true);
+          } catch (e) {
+            toast("Couldn't plan it: " + (e.message || e));
+          } finally {
+            $("#recheck-now").disabled = false;
+          }
+        });
+
+        // =============================================================================
+        // Starts a planned second check early.
+        // =============================================================================
+        $("#rc-start-now").addEventListener("click", async () => {
+          if (
+            !(await ask({
+              title: "Start the second check now?",
+              message: "Instead of waiting for the planned time.",
+              confirm: "Start now",
+            }))
+          )
+            return;
+          startSecond();
+        });
+
+        // =============================================================================
+        // Calls off a planned second check.
+        // =============================================================================
+        $("#rc-cancel").addEventListener("click", async () => {
+          await API.setRecheck(sid, {
+            mode: "manual",
+            window: lastStats?.recheck.window || rcWindow,
+          });
+          toast("Plan cancelled");
+          render(true);
+        });
+
+        // =============================================================================
+        // Slides: a PDF (or pictures turned into a PDF) drawn here page by page with a drawing
+        // layer on top. Students follow the current slide on their phones.
+        // =============================================================================
+        let deck = null,
+          deckDoc = null,
+          deckBytes = null,
+          slide = 1,
+          slideTimer = 0;
+        const deckSession = { id: sid, courseId: course.id };
+        API.cleanupDecks?.(course.id, sid).catch(() => {});
+
+        // =============================================================================
+        // The drawings live in this browser for the whole lecture, so a reload keeps them: the
+        // slides' drawings by page, and the whiteboard pages.
+        // =============================================================================
+        const INK_KEY = "cp.ink." + sid;
+        let ink = (() => {
+          try {
+            return JSON.parse(localStorage.getItem(INK_KEY)) || {};
+          } catch (e) {
+            return {};
+          }
+        })();
+        ink.board =
+          Array.isArray(ink.board) && ink.board.length ? ink.board : [[]];
+        let inkTimer = 0;
+
+        // =============================================================================
+        // Saves the drawings a moment after the last change.
+        // =============================================================================
+        const saveInk = () => {
+          clearTimeout(inkTimer);
+          inkTimer = setTimeout(() => {
+            try {
+              localStorage.setItem(INK_KEY, JSON.stringify(ink));
+            } catch (e) {}
+          }, 400);
+        };
+
+        // =============================================================================
+        // A name for the slides now showing, so drawings stay with the right file.
+        // =============================================================================
+        const deckKey = () =>
+          deck
+            ? (deck.name || "") + "|" + (deck.pages || deckDoc?.numPages || 0)
+            : "";
+
+        // =============================================================================
+        // The drawings of the slide now showing.
+        // =============================================================================
+        const slideInk = () => {
+          if (!deck) return [];
+          if (!ink.deck || ink.deck.key !== deckKey())
+            ink.deck = { key: deckKey(), pages: {} };
+          return (ink.deck.pages[slide] ||= []);
+        };
+
+        // =============================================================================
+        // The drawing layer on the slides.
+        // =============================================================================
+        const deckPen = Ink.attach($("#deck-ink"), {
+          items: slideInk,
+          changed: saveInk,
+        });
+        Ink.toolbar($("#deck-tools"), deckPen, { dark: true });
+        new MutationObserver(() =>
+          $("#deck-stage").classList.toggle(
+            "drawing",
+            $("#deck-ink").dataset.tool !== "none",
+          ),
+        ).observe($("#deck-ink"), {
+          attributes: true,
+          attributeFilter: ["data-tool"],
+        });
+
+        // =============================================================================
+        // True for PowerPoint, Word and Excel files.
+        // =============================================================================
+        const isOffice = (name) => /\.(pptx?|docx?|xlsx?)$/i.test(name || "");
+
+        // =============================================================================
+        // True for pictures (PNG, JPEG, WebP).
+        // =============================================================================
+        const isImage = (f) =>
+          /^image\//.test(f.type) || /\.(png|jpe?g|webp)$/i.test(f.name);
+
+        // =============================================================================
+        // Shows a slides file and remembers which slide is open.
+        // =============================================================================
+        async function showDeck(doc, meta) {
+          deckDoc = doc;
+          deck = meta;
+          slide = Math.min(meta.slide || 1, doc?.numPages || 1);
+          $("#deck-drop").classList.add("hidden");
+          $("#deck-view").classList.remove("hidden");
+          const office = meta.kind === "office";
+          $("#deck-sheet").classList.toggle("hidden", office);
+          $("#deck-office").classList.toggle("hidden", !office);
+          $all(
+            "#deck-tools, #deck-back, #deck-fwd, #deck-count, #deck-prev, #deck-next",
+          ).forEach((el) => el.classList.toggle("hidden", office));
+          setText($("#deck-name"), meta.name || "Slides");
+          if (office) {
+            if (meta.url) $("#deck-office").src = officeViewer(meta.url);
+            return;
+          }
+          deckPen.newPage();
+          drawSlide();
+        }
+
+        // =============================================================================
+        // Office files are shown with Microsoft's online viewer.
+        // =============================================================================
+        const officeViewer = (url) =>
+          "https://view.officeapps.live.com/op/embed.aspx?src=" +
+          encodeURIComponent(url);
+
+        // =============================================================================
+        // Hides the slides.
+        // =============================================================================
+        function hideDeck() {
+          deck = deckDoc = deckBytes = null;
+          $("#deck-office").removeAttribute("src");
+          $("#deck-drop").classList.remove("hidden");
+          $("#deck-view").classList.add("hidden");
+        }
+
+        // =============================================================================
+        // Draws the current slide and its drawings.
+        // =============================================================================
+        async function drawSlide() {
+          if (!deckDoc || view !== "slides") return;
+          const box = $("#deck-stage").getBoundingClientRect();
+          setText($("#deck-count"), `${slide} / ${deckDoc.numPages}`);
+          await Files.drawPage(
+            deckDoc,
+            slide,
+            $("#deck-canvas"),
+            box.width,
+            Math.max(240, box.height),
+          ).catch(() => {});
+          deckPen.redraw();
+        }
+
+        // =============================================================================
+        // A question that names a slide: clicking it opens the slides on that page.
+        // =============================================================================
+        $("#qlist").addEventListener("click", (e) => {
+          const b = e.target.closest("[data-goto-slide]");
+          if (!b) return;
+          if (!deckDoc) return toast("No slides are open");
+          $('[data-view="slides"]').click();
+          goSlide(Number(b.dataset.gotoSlide));
+        });
+
+        // =============================================================================
+        // Goes to slide n, here and on the students' phones.
+        // =============================================================================
+        function goSlide(n) {
+          if (!deckDoc) return;
+          const next = Math.max(1, Math.min(deckDoc.numPages, n));
+          if (next === slide) return;
+          slide = next;
+          deckPen.newPage();
+          drawSlide();
+          clearTimeout(slideTimer);
+          slideTimer = setTimeout(
+            () => deck?.path && API.setSlide(sid, slide).catch(() => {}),
+            250,
+          );
+        }
+
+        // =============================================================================
+        // Pictures become one PDF (one picture per page), so they can be drawn on and followed
+        // like slides.
+        // =============================================================================
+        async function imagesToPDF(files) {
+          const { PDFDocument } = await Files.pdfWriter();
+          const pdf = await PDFDocument.create();
+          for (const f of files) {
+            let bytes = new Uint8Array(await f.arrayBuffer()),
+              png = /png$/i.test(f.type) || /\.png$/i.test(f.name);
+            if (!png && !/jpe?g$/i.test(f.type) && !/\.jpe?g$/i.test(f.name)) {
+              const bmp = await createImageBitmap(f),
+                c = document.createElement("canvas");
+              c.width = bmp.width;
+              c.height = bmp.height;
+              c.getContext("2d").drawImage(bmp, 0, 0);
+              bytes = new Uint8Array(
+                await (
+                  await new Promise((r) => c.toBlob(r, "image/png"))
+                ).arrayBuffer(),
+              );
+              png = true;
+            }
+            const img = png
+              ? await pdf.embedPng(bytes)
+              : await pdf.embedJpg(bytes);
+            pdf
+              .addPage([img.width, img.height])
+              .drawImage(img, {
+                x: 0,
+                y: 0,
+                width: img.width,
+                height: img.height,
+              });
+          }
+          return new File(
+            [await pdf.save()],
+            (files.length > 1
+              ? "Pictures"
+              : files[0].name.replace(/\.\w+$/, "")) + ".pdf",
+            { type: "application/pdf" },
+          );
+        }
+        $("#deck-file").setAttribute("multiple", "");
+
+        // =============================================================================
+        // Uploads the slides the lecturer picked (a PDF, pictures, or an Office file) and
+        // shows them.
+        // =============================================================================
+        $("#deck-file").addEventListener("change", async (e) => {
+          let files = [...e.target.files];
+          e.target.value = "";
+          if (!files.length) return;
+          let f = files[0];
+          if (files.every(isImage)) {
+            try {
+              f = await imagesToPDF(files);
+            } catch (err) {
+              return toast("These pictures couldn't be opened");
+            }
+          } else if (files.length > 1)
+            return toast("Choose one file (or several pictures)");
+          const office = isOffice(f.name),
+            pdf = /\.pdf$/i.test(f.name) || f.type === "application/pdf";
+          if (!office && !pdf)
+            return toast(
+              "Use a PDF, PowerPoint, Word or Excel file, or pictures",
+            );
+          let doc = null;
+          if (pdf) {
+            try {
+              deckBytes = await f.arrayBuffer();
+              doc = await Files.openPDF(new Blob([deckBytes]));
+            } catch (err) {
+              return toast("This PDF couldn't be opened");
+            }
+          }
+          await showDeck(doc, {
+            name: f.name,
+            slide: 1,
+            kind: office ? "office" : "pdf",
+            pages: doc?.numPages || 1,
+          });
+          setText(
+            $("#deck-sync"),
+            office
+              ? "Uploading (the viewer needs it online)…"
+              : "Sending to students…",
+          );
+          try {
+            const path = await API.uploadDeck(
+              deckSession,
+              f,
+              doc?.numPages || 1,
+              office ? "office" : "pdf",
+            );
+            deck = { ...deck, path };
+            if (office) {
+              deck.url = await API.deckURL(path, 6 * 3600);
+              $("#deck-office").src = officeViewer(deck.url);
+            }
+            setText($("#deck-sync"), "● On students' phones");
+            if (slide > 1) API.setSlide(sid, slide).catch(() => {});
+          } catch (err) {
+            setText($("#deck-sync"), "Not sent: " + err.message);
+          }
+        });
+        $("#deck-prev").addEventListener("click", () => goSlide(slide - 1));
+        $("#deck-next").addEventListener("click", () => goSlide(slide + 1));
+        $("#deck-back").addEventListener("click", () => goSlide(slide - 1));
+        $("#deck-fwd").addEventListener("click", () => goSlide(slide + 1));
+
+        // =============================================================================
+        // Switches an element in or out of full screen.
+        // =============================================================================
+        const fullscreen = (el) =>
+          (document.fullscreenElement
+            ? document.exitFullscreen()
+            : el.requestFullscreen?.()
+          )?.catch?.(() => {});
+        $("#deck-full").addEventListener("click", () =>
+          fullscreen($("#deck-view")),
+        );
+
+        // =============================================================================
+        // Updates the full-screen buttons when full screen turns on or off.
+        // =============================================================================
+        document.addEventListener("fullscreenchange", () => {
+          const on = !!document.fullscreenElement;
+          setText($("#deck-full"), on ? "Exit full screen" : "Full screen");
+          setText($("#board-full"), on ? "Exit full screen" : "Full screen");
+          setTimeout(() => {
+            drawSlide();
+            boardPen.redraw();
+          }, 60);
+        });
+        addEventListener("resize", () => {
+          clearTimeout(drawSlide.t);
+          drawSlide.t = setTimeout(() => {
+            drawSlide();
+            boardPen.redraw();
+          }, 120);
+        });
+
+        // =============================================================================
+        // Keyboard on the projector: the arrows, Page Up/Down, Space, Home and End move
+        // between slides or board pages, and Ctrl/Cmd + Z undoes the last drawing.
+        // =============================================================================
+        addEventListener("keydown", (e) => {
+          if (e.target.closest("input, textarea, select, dialog")) return;
+          if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+            if (view === "slides") {
+              e.preventDefault();
+              deckPen.undo();
+            } else if (view === "board") {
+              e.preventDefault();
+              boardPen.undo();
+            }
+            return;
+          }
+          if (view === "board") {
+            const k = { ArrowRight: 1, PageDown: 1, ArrowLeft: -1, PageUp: -1 }[
+              e.key
+            ];
+            if (k) {
+              e.preventDefault();
+              goBoard(boardPage + k);
+            }
+            return;
+          }
+          if (view !== "slides" || !deckDoc) return;
+          const k = {
+            ArrowRight: 1,
+            ArrowDown: 1,
+            PageDown: 1,
+            " ": 1,
+            ArrowLeft: -1,
+            ArrowUp: -1,
+            PageUp: -1,
+          }[e.key];
+          if (k) {
+            e.preventDefault();
+            goSlide(slide + k);
+          } else if (e.key === "Home") goSlide(1);
+          else if (e.key === "End") goSlide(deckDoc.numPages);
+        });
+
+        // =============================================================================
+        // Removes the slides (from the students' phones too) and their drawings.
+        // =============================================================================
+        $("#deck-remove").addEventListener("click", async () => {
+          if (
+            !(await ask({
+              title: "Remove the slides?",
+              message:
+                "They disappear from the students' phones too, and your drawings on them are deleted.",
+              confirm: "Remove slides",
+              danger: true,
+            }))
+          )
+            return;
+          hideDeck();
+          delete ink.deck;
+          saveInk();
+          await API.removeDeck(deckSession).catch(() => {});
+        });
+        if (session.deck?.path) {
+          // =============================================================================
+          // When the lecture already had slides (for example after a reload), shows them again.
+          // =============================================================================
+          (async () => {
+            try {
+              const office = session.deck.kind === "office";
+              const url = await API.deckURL(
+                session.deck.path,
+                office ? 6 * 3600 : 3600,
+              );
+              if (office) return showDeck(null, { ...session.deck, url });
+              deckBytes = await (await fetch(url)).arrayBuffer();
+              await showDeck(
+                await Files.openPDF(new Blob([deckBytes])),
+                session.deck,
+              );
+              setText($("#deck-sync"), "● On students' phones");
+            } catch (e) {}
+          })();
+        }
+
+        // =============================================================================
+        // Whiteboard: the page now showing.
+        // =============================================================================
+        let boardPage = 0;
+        const boardPen = Ink.attach($("#board-ink"), {
+          items: () => ink.board[boardPage],
+          changed: saveInk,
+        });
+        Ink.toolbar($("#board-tools"), boardPen, {
+          dark: true,
+          withNone: false,
+        });
+        boardPen.setTool("pen");
+        $('#board-tools [data-t="pen"]').setAttribute("aria-pressed", "true");
+
+        // =============================================================================
+        // Goes to whiteboard page n.
+        // =============================================================================
+        function goBoard(n) {
+          boardPage = Math.max(0, Math.min(ink.board.length - 1, n));
+          setText($("#board-count"), `${boardPage + 1} / ${ink.board.length}`);
+          boardPen.newPage();
+        }
+        $("#board-back").addEventListener("click", () =>
+          goBoard(boardPage - 1),
+        );
+        $("#board-fwd").addEventListener("click", () => goBoard(boardPage + 1));
+        $("#board-add").addEventListener("click", () => {
+          ink.board.push([]);
+          saveInk();
+          goBoard(ink.board.length - 1);
+        });
+        $("#board-full").addEventListener("click", () =>
+          fullscreen($('[data-panel="board"]')),
+        );
+        goBoard(0);
+
+        // =============================================================================
+        // Opening the slides or the board tab also redraws it at its new size.
+        // =============================================================================
+        const origSetView = setView;
+        setView = (v) => {
+          origSetView(v);
+          if (v === "slides") requestAnimationFrame(drawSlide);
+          if (v === "board") requestAnimationFrame(boardPen.redraw);
+        };
+
+        // =============================================================================
+        // How many slides have drawings on them.
+        // =============================================================================
+        const pagesWithInk = () =>
+          Object.values(
+            ink.deck?.key === deckKey() ? ink.deck.pages : {},
+          ).filter((p) => p.length).length;
+
+        // =============================================================================
+        // How many whiteboard pages have something on them.
+        // =============================================================================
+        const boardUsed = () => ink.board.filter((p) => p.length).length;
+
+        // =============================================================================
+        // The slides PDF with the drawings stamped onto each page.
+        // =============================================================================
+        async function deckWithInk() {
+          if (!deckBytes)
+            deckBytes = await (
+              await fetch(await API.deckURL(deck.path))
+            ).arrayBuffer();
+          const { PDFDocument } = await Files.pdfWriter();
+          const pdf = await PDFDocument.load(deckBytes.slice(0), {
+            ignoreEncryption: true,
+          });
+          const pages = pdf.getPages();
+          const drawn = Object.entries(
+            ink.deck?.key === deckKey() ? ink.deck.pages : {},
+          ).filter(([, items]) => items.length);
+          let k = 0;
+          for (const [n, items] of drawn) {
+            const page = pages[+n - 1];
+            if (!page) continue;
+            setText(
+              $("#end-note"),
+              `Putting your drawings on the slides: ${++k} of ${drawn.length}…`,
+            );
+            const { width, height } = page.getSize();
+            const scale = Math.min(2, 2400 / Math.max(width, height));
+            const png = await Ink.toPNG(
+              items,
+              Math.max(1, Math.round(width * scale)),
+              Math.max(1, Math.round(height * scale)),
+            );
+            if (!png)
+              throw new Error("a drawing couldn't be turned into a picture");
+            const img = await pdf.embedPng(
+              new Uint8Array(await png.arrayBuffer()),
+            );
+            page.drawImage(img, { x: 0, y: 0, width, height });
+          }
+          setText($("#end-note"), "Saving the PDF…");
+          return new Blob([await pdf.save()], { type: "application/pdf" });
+        }
+
+        // =============================================================================
+        // The whiteboard pages as one PDF.
+        // =============================================================================
+        async function boardPDF() {
+          const { PDFDocument, rgb } = await Files.pdfWriter();
+          const pdf = await PDFDocument.create(),
+            W = 1280,
+            H = 720;
+          for (const items of ink.board.filter((p) => p.length)) {
+            const page = pdf.addPage([W, H]);
+            page.drawRectangle({
+              x: 0,
+              y: 0,
+              width: W,
+              height: H,
+              color: rgb(0.984, 0.98, 0.965),
+            });
+            const png = await Ink.toPNG(items, W * 2, H * 2);
+            page.drawImage(
+              await pdf.embedPng(new Uint8Array(await png.arrayBuffer())),
+              { x: 0, y: 0, width: W, height: H },
+            );
+          }
+          return new Blob([await pdf.save()], { type: "application/pdf" });
+        }
+
+        // =============================================================================
+        // The name used for saved files, like "Software Engineering - Lecture 6".
+        // =============================================================================
+        const lectureName = () =>
+          `${course.name} - Lecture ${session.number || ""}`.trim();
+
+        // =============================================================================
+        // "End lecture": opens the window that asks what to keep.
+        // =============================================================================
+        $("#end-btn").addEventListener("click", () => {
+          const dlg = $("#end-dlg");
+          const hasDeck = !!deck?.path || !!deckDoc,
+            office = deck?.kind === "office",
+            drawn = pagesWithInk(),
+            used = boardUsed();
+          $("#end-slides").classList.toggle("hidden", !hasDeck);
+          setText(
+            $("#end-slides-h"),
+            `Slides: ${deck?.name || ""}${drawn ? ` (drawings on ${drawn} page${drawn === 1 ? "" : "s"})` : ""}`,
+          );
+          setText(
+            $("#end-sl-dl-t"),
+            office || !drawn ? "Download a copy" : "Download with my drawings",
+          );
+          $("#end-board").classList.toggle("hidden", !used);
+          setText(
+            $("#end-board-h"),
+            `Whiteboard (${used} page${used === 1 ? "" : "s"})`,
+          );
+          $all("#end-dlg input[type=checkbox]").forEach(
+            (c) => (c.checked = false),
+          );
+          setText(
+            $("#end-note"),
+            hasDeck || used
+              ? "Anything you don't keep is deleted when the lecture ends."
+              : "",
+          );
+          $("#end-ok").disabled = false;
+          dlg.showModal();
+        });
+
+        // =============================================================================
+        // Never hangs on "Preparing...": after 90 seconds it says so and lets the lecturer try
+        // again.
+        // =============================================================================
+        const inTime = (p, what) =>
+          Promise.race([
+            p,
+            new Promise((_, no) =>
+              setTimeout(
+                () =>
+                  no(
+                    new Error(
+                      `preparing ${what} took too long (is the internet slow?)`,
+                    ),
+                  ),
+                90000,
+              ),
+            ),
+          ]);
+
+        // =============================================================================
+        // True once the lecture has ended (render() checks it).
+        // =============================================================================
+        var endDone = false;
+        $("#end-dlg").addEventListener("cancel", (e) => {
+          if (endDone || $("#end-ok").disabled) e.preventDefault();
+        });
+
+        // =============================================================================
+        // Goes to the attendance sheet after the lecture.
+        // =============================================================================
+        const goToSheet = () =>
+          window.Curtain
+            ? Curtain.go(`attendance.html?course=${course.code}`, {
+                dir: "back",
+              })
+            : (location.href = `attendance.html?course=${course.code}`);
+
+        // =============================================================================
+        // Ends the lecture: prepares the chosen files (slides with drawings, whiteboard),
+        // shares the ones the lecturer ticked with the class, deletes the slides from storage,
+        // ends the session, and offers the files for download.
+        // =============================================================================
+        $("#end-ok").addEventListener("click", async (e) => {
+          e.preventDefault();
+          if (endDone) {
+            $("#end-dlg").close();
+            return goToSheet();
+          }
+          $("#end-ok").disabled = true;
+          $("#end-cancel").disabled = true;
+          setText($("#end-ok"), "Working…");
+          // True when a choice is ticked and visible.
+          const want = (id) => $(id).checked && !$(id).closest(".hidden");
+          const ready = [];
+          try {
+            Files.pdfWriter().catch(() => {});
+            if (want("#end-sl-dl") || want("#end-sl-share")) {
+              setText($("#end-note"), "Preparing the slides…");
+              const office = deck?.kind === "office";
+              const blob = await inTime(
+                office
+                  ? fetch(await API.deckURL(deck.path)).then((r) => r.blob())
+                  : deckWithInk(),
+                "the slides",
+              );
+              const name = office
+                ? deck.name
+                : (deck.name || "Slides").replace(/\.\w+$/, "") +
+                  (pagesWithInk() ? " (with notes)" : "") +
+                  ".pdf";
+              if (want("#end-sl-dl"))
+                ready.push([
+                  pagesWithInk() && !office
+                    ? "Slides with your drawings"
+                    : "Slides",
+                  blob,
+                  name,
+                ]);
+              if (want("#end-sl-share")) {
+                setText($("#end-note"), "Sharing the slides with the class…");
+                await API.addMaterial(course.id, sid, {
+                  title: `${lectureName()}: slides`,
+                  kind: "slides",
+                  blob,
+                  fileName: name,
+                });
+              }
+            }
+            if (want("#end-bd-dl") || want("#end-bd-share")) {
+              setText($("#end-note"), "Preparing the whiteboard…");
+              const blob = await inTime(boardPDF(), "the whiteboard"),
+                name = `${lectureName()} - whiteboard.pdf`;
+              if (want("#end-bd-dl")) ready.push(["Whiteboard", blob, name]);
+              if (want("#end-bd-share")) {
+                setText(
+                  $("#end-note"),
+                  "Sharing the whiteboard with the class…",
+                );
+                await API.addMaterial(course.id, sid, {
+                  title: `${lectureName()}: whiteboard`,
+                  kind: "board",
+                  blob,
+                  fileName: name,
+                });
+              }
+            }
+          } catch (err) {
+            setText(
+              $("#end-note"),
+              "Couldn't save: " +
+                (err.message || err) +
+                ". The lecture is still on; try again.",
+            );
+            $("#end-ok").disabled = false;
+            $("#end-cancel").disabled = false;
+            setText($("#end-ok"), "End lecture");
+            return;
+          }
+          setText($("#end-note"), "Ending the lecture…");
+          await API.removeDeck({ ...deckSession, endedAt: 1 }).catch(() => {});
+          await API.endSession(sid);
+          try {
+            localStorage.removeItem(INK_KEY);
+          } catch (e) {}
+          if (!ready.length) {
+            $("#end-dlg").close();
+            return goToSheet();
+          }
+          endDone = true;
+          $all("#end-slides, #end-board").forEach((x) =>
+            x.classList.add("hidden"),
+          );
+          setText($("#end-h"), "Lecture ended");
+          setText(
+            $("#end-note"),
+            `Save your file${ready.length > 1 ? "s" : ""}:`,
+          );
+          $("#end-files").classList.remove("hidden");
+          $("#end-files").innerHTML = ready
+            .map(
+              ([label, , name], i) =>
+                `<a class="btn btn-hl" style="justify-content:flex-start" data-file="${i}" download="${esc(name)}">${icon("download", 16)} ${esc(label)} <span class="small" style="opacity:.7;margin-left:auto">PDF</span></a>`,
+            )
+            .join("");
+          ready.forEach(
+            ([, blob], i) =>
+              ($(`#end-files [data-file="${i}"]`).href =
+                URL.createObjectURL(blob)),
+          );
+          $("#end-cancel").classList.add("hidden");
+          setText($("#end-ok"), "Go to the attendance sheet");
+          $("#end-ok").disabled = false;
+        });
+        $("#end-cancel").addEventListener("click", (e) => {
+          e.preventDefault();
+          $("#end-dlg").close();
+          $("#end-cancel").disabled = false;
+        });
+      })();
+    </script>
+    <span id="page-end" hidden></span>
+  </body>
+</html>
