@@ -42,3 +42,12 @@ This app puts all of it in one place and makes attendance hard to fake. The QR c
 
 The full version, with the plan and how we know each deliverable is done, is in [docs/scope-of-work.md](docs/scope-of-work.md).
 
+## What it does
+
+- **Attendance.** The projector shows a code that keeps changing. The phone captures a few frames, and the database checks that the student is on the list, the frames are real and fresh, they arrived in real time, and (if turned on) the phone is on the class Wi-Fi and near the lecturer. The lecturer can add a second check later in the lecture to catch people who leave early.
+- **Courses and students.** Import the student list from the Moodle export (CSV or Excel), add students by hand, or let them join with a course code. ID numbers are never stored.
+- **Attendance sheet.** Present, partial or absent for every lecture, with the details of each check. Exports to CSV and Excel.
+- **During the lecture.** Live polls, anonymous questions with upvotes, and slides or a whiteboard that students follow on their phones.
+- **AI.** Lecture summaries from a Zoom, Drive or YouTube link, a recording or a transcript, and homework reviews against the assignment's own requirements. Each lecturer uses their own free Gemini key.
+- **Languages.** English, Hebrew and Arabic, right to left where needed.
+
