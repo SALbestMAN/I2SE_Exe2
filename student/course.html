@@ -1,0 +1,1185 @@
+<!doctype html>
+<!-- =============================================================================
+     One course on the student's side. During a lecture: check in, follow the lecturer's
+     slides, answer the poll, and ask questions (anonymous by default, sent later if
+     offline). Also the summaries and materials the lecturer shared, the homework, and
+     the student's own attendance.
+     ============================================================================= -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <meta name="theme-color" content="#F3F0E8" />
+    <meta name="darkreader-lock" />
+    <title>Course</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Heebo:wght@400;500;600;700;800;900&family=Frank+Ruhl+Libre:wght@400;500;700&display=swap"
+    />
+    <link rel="stylesheet" href="../css/style.css?v=7.0" />
+    <script src="../js/i18n-strings.js?v=7.0"></script>
+    <script src="../js/i18n.js?v=7.0"></script>
+    <link rel="expect" href="#page-end" blocking="render" />
+  </head>
+  <body>
+    <script>
+      // =============================================================================
+      // Runs before anything is drawn. When the person arrives from (or goes into) the live
+      // room, the curtain sheet is still covering the screen, so it is put back right away
+      // and the page never flashes in between. See js/curtain.js.
+      // =============================================================================
+      try {
+        var cpO = JSON.parse(sessionStorage.getItem("cp.curtain") || "null"),
+          cpN = (performance.getEntriesByType("navigation")[0] || {}).type,
+          cpD = document.body.classList.contains("dark-screen");
+        sessionStorage.removeItem("cp.curtain");
+        if (
+          !cpO &&
+          cpN === "back_forward" &&
+          cpD !== (sessionStorage.getItem("cp.fromDark") === "1")
+        )
+          cpO = { dir: "back", color: "blue" };
+        if (cpO) {
+          var cpC = document.createElement("div");
+          cpC.className =
+            "curtain " +
+            (cpO.color === "ink" ? "ink" : "blue") +
+            (cpO.dir === "back" ? " edge-left" : " edge-right");
+          cpC.setAttribute("aria-hidden", "true");
+          cpC.dataset.dir = cpO.dir;
+          cpC.dataset.mode = "slide";
+          document.body.prepend(cpC);
+        }
+      } catch (e) {}
+    </script>
+    <div class="phone">
+      <main class="phone-main">
+        <div id="course-head"></div>
+
+        <div
+          id="offline-banner"
+          class="banner hidden"
+          style="border: 1px dashed var(--line-3)"
+        >
+          <span class="small"
+            ><b>You're offline.</b> Messages are saved and sent when you're back
+            online.</span
+          >
+        </div>
+
+        <div
+          id="checked-banner"
+          class="banner hidden"
+          style="background: var(--ink); color: var(--paper)"
+        >
+          <span
+            style="
+              width: 36px;
+              height: 36px;
+              border-radius: 50%;
+              background: var(--hl);
+              color: var(--ink);
+              display: grid;
+              place-items: center;
+              flex-shrink: 0;
+            "
+            id="ok-icon"
+          ></span>
+          <span
+            ><b style="font-size: 17px"
+              >You're
+              <span class="serif" style="font-weight: 400">checked in.</span></b
+            ><br /><span
+              class="mono"
+              style="font-size: 10px; color: var(--on-dark-2)"
+              id="checked-time"
+            ></span
+          ></span>
+        </div>
+
+        <a
+          id="recheck-alert"
+          class="banner hidden"
+          style="
+            background: var(--hl);
+            text-decoration: none;
+            color: var(--ink);
+          "
+        >
+          <span id="recheck-icon" style="display: flex"></span>
+          <span style="flex: 1"
+            ><b style="font-size: 17px"
+              >Second check:
+              <span class="serif" style="font-weight: 400">scan now.</span></b
+            ><br /><span
+              class="mono"
+              style="font-size: 10px"
+              id="recheck-left"
+            ></span
+          ></span>
+          <span class="btn btn-primary">Scan</span>
+        </a>
+
+        <!-- =============================================================================
+         Live: what happens during the lecture.
+         ============================================================================= -->
+        <section data-panel="live" class="cols">
+          <div class="main">
+            <!-- =============================================================================
+             The lecturer's slides, while the lecture is live.
+             ============================================================================= -->
+            <section
+              class="card deck-card stack hidden"
+              id="deck-card"
+              aria-label="Lecture slides"
+            >
+              <div
+                class="row"
+                style="justify-content: space-between; align-items: center"
+              >
+                <span class="label" style="color: var(--blue)">● Slides</span>
+                <span
+                  class="mono muted"
+                  style="font-size: 11px"
+                  id="sd-count"
+                ></span>
+              </div>
+              <div class="deck-shot" id="sd-shot">
+                <canvas id="sd-canvas" aria-label="Current slide"></canvas>
+              </div>
+              <div class="row wrap" style="gap: 8px; align-items: center">
+                <button
+                  type="button"
+                  class="btn"
+                  id="sd-prev"
+                  aria-label="Previous slide"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  class="btn"
+                  id="sd-next"
+                  aria-label="Next slide"
+                >
+                  ›
+                </button>
+                <label class="row small" style="gap: 8px; color: var(--ink-2)"
+                  ><input
+                    type="checkbox"
+                    class="check ink"
+                    id="sd-follow"
+                    checked
+                  />Follow the lecturer</label
+                >
+                <button type="button" class="btn" id="sd-ask">
+                  Ask about this slide
+                </button>
+                <span style="flex: 1"></span>
+                <a class="btn" id="sd-open" target="_blank" rel="noopener"
+                  >Open PDF</a
+                >
+                <button
+                  type="button"
+                  class="btn"
+                  id="sd-full"
+                  aria-label="Full screen"
+                ></button>
+              </div>
+            </section>
+            <h2 class="section-title" style="font-size: 40px">
+              Ask <span class="serif">anything.</span>
+            </h2>
+            <form class="ask-box" id="ask-form">
+              <label for="q" class="sr-only">Your question or comment</label>
+              <textarea
+                id="q"
+                rows="3"
+                placeholder="Type a question or a comment for the lecturer…"
+                maxlength="300"
+                dir="auto"
+              ></textarea>
+              <div class="foot">
+                <span class="row wrap" style="gap: 16px">
+                  <label
+                    class="row"
+                    style="gap: 10px; font-size: 14px; color: var(--ink-2)"
+                    ><input
+                      type="checkbox"
+                      class="check ink"
+                      id="anon"
+                      checked
+                    />Post anonymously</label
+                  >
+                  <label class="ask-slide hidden" id="q-slide-l"
+                    ><input
+                      type="checkbox"
+                      class="check ink"
+                      id="q-slide"
+                    /><span id="q-slide-t">About slide 1</span></label
+                  >
+                </span>
+                <button class="btn btn-primary" id="send-btn">Send</button>
+              </div>
+            </form>
+            <div
+              class="row"
+              style="gap: 8px; margin-top: 6px"
+              role="group"
+              aria-label="Sort questions"
+              id="q-sort"
+            >
+              <button
+                type="button"
+                class="btn btn-pill"
+                data-sort="top"
+                aria-pressed="true"
+              >
+                Top
+              </button>
+              <button
+                type="button"
+                class="btn btn-pill"
+                data-sort="new"
+                aria-pressed="false"
+              >
+                Newest
+              </button>
+              <button
+                type="button"
+                class="btn btn-pill"
+                data-sort="answered"
+                aria-pressed="false"
+              >
+                Answered
+              </button>
+            </div>
+            <div id="questions"></div>
+          </div>
+          <div class="aside">
+            <section
+              class="card dashed stack"
+              style="gap: 10px"
+              id="poll-card"
+              aria-label="Poll"
+            >
+              <div class="skeleton" style="height: 90px"></div>
+            </section>
+            <section
+              class="card"
+              id="att-mini"
+              aria-label="My attendance"
+            ></section>
+            <section
+              class="card ink hidden"
+              id="sum-mini"
+              aria-label="Latest summary"
+            ></section>
+          </div>
+        </section>
+
+        <!-- =============================================================================
+         Summaries the lecturer shared.
+         ============================================================================= -->
+        <div
+          data-panel="summaries"
+          class="stack hidden narrow"
+          style="gap: 18px"
+        >
+          <!-- =============================================================================
+           Slides and whiteboards the lecturer kept for the class.
+           ============================================================================= -->
+          <section
+            class="card stack hidden"
+            style="padding: 18px; gap: 10px"
+            id="mat-list"
+            aria-label="Lecture materials"
+          ></section>
+          <section class="stack" style="gap: 14px" id="sum-list"></section>
+        </div>
+
+        <!-- =============================================================================
+         Homework.
+         ============================================================================= -->
+        <section
+          data-panel="homework"
+          class="stack hidden narrow"
+          style="gap: 10px"
+          id="hw-list"
+        ></section>
+
+        <!-- =============================================================================
+         The student's own attendance in this course.
+         ============================================================================= -->
+        <section
+          data-panel="attendance"
+          class="stack hidden narrow"
+          style="gap: 14px"
+          id="my-att"
+        ></section>
+      </main>
+    </div>
+
+    <script src="../js/config.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/api-supabase.js?v=7.0"></script>
+    <script src="../js/files.js?v=7.0"></script>
+    <script src="../js/ui.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+    <script src="../js/curtain.js?v=7.0"></script>
+    <script src="../js/motion.js?v=7.0"></script>
+    <script src="../js/printer.js?v=7.0"></script>
+    <script>
+      // =============================================================================
+      // The student course page's code.
+      // =============================================================================
+      (async () => {
+        const me = requireRole("student");
+        renderStudentNav();
+
+        // =============================================================================
+        // The header: the course's book, its name, the live check-in button, and the tabs.
+        // =============================================================================
+        const TABS = [
+          ["live", "Live"],
+          ["summaries", "Summaries"],
+          ["homework", "Homework"],
+          ["attendance", "Attendance"],
+        ];
+        let tab = TABS.some((t) => t[0] === param("tab"))
+            ? param("tab")
+            : "live",
+          counts = {},
+          liveS = null,
+          liveDone = false;
+
+        // =============================================================================
+        // Draws the header for the current tab.
+        // =============================================================================
+        function drawHead(c) {
+          if (!c) return;
+          const when = scheduleText(c, { long: true });
+          const kicker = [
+            c.code,
+            when,
+            c.held ? `${c.held} lecture${c.held === 1 ? "" : "s"}` : "",
+          ]
+            .filter(Boolean)
+            .map(esc)
+            .join(" · ");
+          const cta =
+            liveS && liveS.checkin === "open" && !liveDone
+              ? `<a class="live-cta" href="scan.html?course=${c.code}"><span class="mono">● Lecture ${pad2(liveS.number)} live</span><b>Check in</b></a>`
+              : liveS
+                ? `<span class="live-pill" style="font-size:10px;padding:6px 12px">● Lecture ${pad2(liveS.number)} live</span>`
+                : "";
+          const html =
+            courseTopHTML(c, kicker, cta) +
+            `<div class="tabs" role="tablist" aria-label="Course sections">${TABS.map(
+              ([k, l]) =>
+                `<button role="tab" data-tab="${k}" aria-selected="${k === tab}">${l}${counts[k] ? ` <span class="n">${counts[k]}</span>` : ""}${k === tab ? '<span class="tab-ink"></span>' : ""}</button>`,
+            ).join("")}</div>`;
+          const el = $("#course-head");
+          if (el._html === html) return;
+          el._html = html;
+          el.innerHTML = html;
+        }
+        drawHead(knownCourse());
+        const course = await getCourse();
+        if (!course) {
+          location.replace("home.html");
+          return;
+        }
+        $("#ok-icon").innerHTML = icon("check", 18, "currentColor", 2.6);
+        $("#send-btn").innerHTML =
+          `Send <span class="flip" style="display:flex">${icon("send", 16, "currentColor", 2.2)}</span>`;
+        $("#recheck-icon").innerHTML = icon("clock", 22);
+        drawHead(course);
+
+        // =============================================================================
+        // Switches tab: the underline slides over and the content cross-fades.
+        // =============================================================================
+        function showTab(name) {
+          // Shows the new tab and loads its content.
+          const go = () => {
+            tab = name;
+            drawHead(course);
+            $all("[data-panel]").forEach((p) =>
+              p.classList.toggle("hidden", p.dataset.panel !== name),
+            );
+            try {
+              history.replaceState(
+                null,
+                "",
+                `?course=${course.code}${name === "live" ? "" : "&tab=" + name}`,
+              );
+            } catch (e) {}
+          };
+          if (
+            document.startViewTransition &&
+            !matchMedia("(prefers-reduced-motion: reduce)").matches
+          )
+            document.startViewTransition(go);
+          else go();
+        }
+        $("#course-head").addEventListener("click", (e) => {
+          const t = e.target.closest('[role="tab"]');
+          if (t && t.dataset.tab !== tab) showTab(t.dataset.tab);
+        });
+        $all("[data-panel]").forEach((p) =>
+          p.classList.toggle("hidden", p.dataset.panel !== tab),
+        );
+
+        // =============================================================================
+        // The check-in card: whether a lecture is live, whether the student already checked
+        // in, and a loud alert when the second check starts.
+        // =============================================================================
+        async function renderCheck() {
+          const s = await API.activeSession(course.id);
+          const rec = s ? await API.myRecord(s.id, me.email) : {};
+          {
+            const r0 = s ? API.recheckState(s) : {};
+            liveS = s;
+            liveDone = !!(r0.active ? rec.check2 : rec.check1);
+            drawHead(course);
+          }
+          renderDeck(s);
+          $("#checked-banner").classList.toggle(
+            "hidden",
+            !rec.check1 && !rec.check2,
+          );
+          if (rec.check1 || rec.check2) {
+            const r = API.recheckState(s);
+            setText(
+              $("#checked-time"),
+              rec.check2
+                ? `Second check done at ${fmtTime(rec.check2.time)}`
+                : `${fmtTime(rec.check1.time)}, ${r.enabled && !r.startedAt ? "Keep the app open for the second check" : "Lecture " + s.number}`,
+            );
+          }
+          const r = s ? API.recheckState(s) : {};
+          const needSecond =
+            s && s.checkin === "open" && r.active && !rec.check2;
+          $("#recheck-alert").classList.toggle("hidden", !needSecond);
+          if (needSecond) {
+            $("#recheck-alert").href = `scan.html?course=${course.code}`;
+            setText(
+              $("#recheck-left"),
+              `${Math.max(0, Math.ceil((r.endsAt - API.now()) / 1000))} seconds left`,
+            );
+            if (!renderCheck.buzzed) {
+              navigator.vibrate?.(400);
+              renderCheck.buzzed = true;
+            }
+          }
+        }
+
+        // =============================================================================
+        // The lecturer's slides. They are only here while the lecture is live and disappear
+        // when it ends.
+        // =============================================================================
+        let sdPath = null,
+          sdDoc = null,
+          sdSlide = 1,
+          sdURL = "",
+          sdDrawn = "";
+
+        // =============================================================================
+        // Loads the slides when the lecturer shares them, and follows the slide the lecturer
+        // is on.
+        // =============================================================================
+        async function renderDeck(s) {
+          const d = s?.deck;
+          if (!d?.path) {
+            if ($("#deck-card").classList.contains("deck-full"))
+              toggleFull(false);
+            $("#deck-card").classList.add("hidden");
+            $("#q-slide-l").classList.add("hidden");
+            $("#q-slide").checked = false;
+            sdPath = sdDoc = null;
+            sdDrawn = "";
+            return;
+          }
+          if (d.path !== sdPath) {
+            sdPath = d.path;
+            sdDoc = null;
+            sdDrawn = "";
+            const office = d.kind === "office";
+            try {
+              sdURL = await API.deckURL(d.path, office ? 6 * 3600 : 3600);
+              if (!office) sdDoc = await Files.openPDF(sdURL);
+            } catch (e) {
+              sdPath = null;
+              return;
+            }
+            $("#sd-open").href = sdURL;
+            setText($("#sd-open"), office ? "Download" : "Open PDF");
+            $("#sd-shot").innerHTML = office
+              ? `<iframe class="deck-office" style="height:60vh" title="Lecture file" src="https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(sdURL)}"></iframe>`
+              : '<canvas id="sd-canvas" aria-label="Current slide"></canvas>';
+            $all("#sd-prev, #sd-next, #sd-follow, #sd-count, #sd-ask").forEach(
+              (el) =>
+                (el.closest("label") || el).classList.toggle("hidden", office),
+            );
+            $("#deck-card").classList.remove("hidden");
+            $("#q-slide-l").classList.toggle("hidden", office);
+          }
+          if ($("#sd-follow").checked) sdSlide = d.slide || 1;
+          drawDeck();
+        }
+
+        // =============================================================================
+        // Draws the current slide.
+        // =============================================================================
+        async function drawDeck() {
+          if (!sdDoc) return;
+          sdSlide = Math.max(1, Math.min(sdDoc.numPages, sdSlide));
+          setText($("#sd-count"), `${sdSlide} / ${sdDoc.numPages}`);
+          setText($("#q-slide-t"), `About slide ${sdSlide}`);
+          const full = $("#deck-card").classList.contains("deck-full");
+          const w = $("#sd-shot").clientWidth,
+            h = full ? $("#sd-shot").clientHeight : innerHeight * 0.6;
+          const key = sdPath + "|" + sdSlide + "|" + w + "|" + Math.round(h);
+          if (key === sdDrawn || !w) return;
+          sdDrawn = key;
+          await Files.drawPage(sdDoc, sdSlide, $("#sd-canvas"), w, h).catch(
+            () => (sdDrawn = ""),
+          );
+        }
+        $("#sd-prev").addEventListener("click", () => {
+          $("#sd-follow").checked = false;
+          sdSlide--;
+          drawDeck();
+        });
+        $("#sd-next").addEventListener("click", () => {
+          $("#sd-follow").checked = false;
+          sdSlide++;
+          drawDeck();
+        });
+        $("#sd-follow").addEventListener("change", () => {
+          if ($("#sd-follow").checked) renderDeck(liveS);
+        });
+
+        // =============================================================================
+        // The full-screen button's icon and label.
+        // =============================================================================
+        const setFullBtn = (on) => {
+          $("#sd-full").innerHTML = icon(
+            on ? "shrink" : "expand",
+            18,
+            "currentColor",
+            2,
+          );
+          $("#sd-full").setAttribute(
+            "aria-label",
+            on ? "Leave full screen" : "Full screen",
+          );
+        };
+        setFullBtn(false);
+
+        // =============================================================================
+        // Full screen for the slides: the browser's own full screen where it allows it (not on
+        // iPhone), and the whole window in any case.
+        // =============================================================================
+        function toggleFull(on) {
+          const card = $("#deck-card");
+          on = on ?? !card.classList.contains("deck-full");
+          card.classList.toggle("deck-full", on);
+          document.body.classList.toggle("deck-open", on);
+          setFullBtn(on);
+          if (on) card.requestFullscreen?.().catch(() => {});
+          else if (document.fullscreenElement)
+            document.exitFullscreen?.().catch(() => {});
+          sdDrawn = "";
+          requestAnimationFrame(drawDeck);
+        }
+        $("#sd-full").addEventListener("click", () => toggleFull());
+        document.addEventListener("fullscreenchange", () => {
+          if (
+            !document.fullscreenElement &&
+            $("#deck-card").classList.contains("deck-full")
+          )
+            toggleFull(false);
+        });
+
+        // =============================================================================
+        // In full screen: Esc leaves it, and the arrow keys move between slides.
+        // =============================================================================
+        addEventListener("keydown", (e) => {
+          if (!$("#deck-card").classList.contains("deck-full")) return;
+          if (e.key === "Escape") toggleFull(false);
+          if (e.key === "ArrowRight" || e.key === "ArrowDown")
+            $("#sd-next").click();
+          if (e.key === "ArrowLeft" || e.key === "ArrowUp")
+            $("#sd-prev").click();
+        });
+
+        // =============================================================================
+        // Asks a question about the slide on screen: the question box opens with the slide
+        // number attached.
+        // =============================================================================
+        $("#sd-ask").addEventListener("click", () => {
+          if ($("#deck-card").classList.contains("deck-full"))
+            toggleFull(false);
+          $("#q-slide").checked = true;
+          $("#q").focus();
+          $("#q").scrollIntoView({ block: "center" });
+        });
+        addEventListener("resize", () => {
+          clearTimeout(drawDeck.t);
+          drawDeck.t = setTimeout(drawDeck, 150);
+        });
+
+        // =============================================================================
+        // The live poll: the answers to tap, then the results with the student's own vote
+        // marked.
+        // =============================================================================
+        async function renderPoll() {
+          const p = await API.currentPoll(course.id, me.email);
+          const fresh = p && (p.open || API.now() - p.createdAt < 30 * 60000);
+          if (!fresh) {
+            $("#poll-card").innerHTML = `<span class="label">Poll</span>
+        <p style="font-size:24px;font-weight:800;letter-spacing:-0.03em;line-height:1.25;margin-top:8px">Nothing <span class="serif">to vote on yet.</span></p>
+        <p class="small" style="color:var(--ink-2)">It appears here the moment your lecturer opens one.</p>`;
+            return;
+          }
+          const key = JSON.stringify([
+            p.id,
+            p.open,
+            p.myVote,
+            p.open ? p.secondsLeft : p.counts,
+          ]);
+          if (key === renderPoll.last) return;
+          renderPoll.last = key;
+          const head = `<div class="row" style="justify-content:space-between">
+        <span class="label" style="${p.open ? "color:var(--blue)" : ""}">${p.open ? "● Live poll" : "Poll closed"}</span>
+        <span class="mono muted" style="font-size:11px">${p.secondsLeft != null ? `${Math.floor(p.secondsLeft / 60)}:${String(p.secondsLeft % 60).padStart(2, "0")} left` : ""}</span>
+      </div>
+      <p style="font-size:20px;font-weight:700;letter-spacing:-0.02em" dir="auto">${esc(p.question)}</p>`;
+          if (p.open) {
+            $("#poll-card").innerHTML =
+              head +
+              p.options
+                .map(
+                  (o, i) =>
+                    `<button type="button" class="poll-opt" aria-pressed="${p.myVote === i}" data-i="${i}" dir="auto"><b>${"ABCD"[i]}</b>${esc(o)}</button>`,
+                )
+                .join("") +
+              `<p class="small muted">${p.myVote != null ? "Answer saved. You can change it until the poll closes." : "Tap an answer."}</p>`;
+            $all("#poll-card .poll-opt").forEach((b) =>
+              b.addEventListener("click", async () => {
+                const res = await API.vote(p.id, me.email, Number(b.dataset.i));
+                if (!res.ok) toast(res.error);
+                renderPoll();
+              }),
+            );
+          } else {
+            $("#poll-card").innerHTML =
+              head +
+              p.options
+                .map((o, i) => {
+                  const pct = p.total
+                    ? Math.round((p.counts[i] / p.total) * 100)
+                    : 0;
+                  return `<div class="pbar light">
+          <span dir="auto"><b style="color:var(--muted);margin-right:8px">${"ABCD"[i]}</b>${esc(o)}${p.myVote === i ? ' <span class="chip accent">Your answer</span>' : ""}</span>
+          <span style="font-weight:700">${pct}%</span>
+          <div class="track"><div style="width:${pct}%"></div></div></div>`;
+                })
+                .join("") +
+              `<p class="small muted">${p.total} answer${p.total === 1 ? "" : "s"}</p>`;
+          }
+        }
+
+        // =============================================================================
+        // Questions written while offline wait in this browser and are sent when the
+        // connection comes back.
+        // =============================================================================
+        const OUTBOX = "lectureapp.outbox";
+
+        // =============================================================================
+        // The questions waiting to be sent.
+        // =============================================================================
+        const readOutbox = () => {
+          try {
+            return JSON.parse(localStorage.getItem(OUTBOX) || "[]");
+          } catch (e) {
+            return [];
+          }
+        };
+
+        // =============================================================================
+        // Saves the questions waiting to be sent.
+        // =============================================================================
+        const writeOutbox = (list) => {
+          try {
+            localStorage.setItem(OUTBOX, JSON.stringify(list));
+          } catch (e) {}
+        };
+
+        // =============================================================================
+        // Sends the waiting questions, with the time they were written.
+        // =============================================================================
+        async function flushOutbox() {
+          if (!navigator.onLine) return;
+          const left = [];
+          for (const m of readOutbox()) {
+            try {
+              const res = await API.addComment(
+                m.courseId,
+                m.email,
+                m.text,
+                m.anonymous,
+                { createdAt: m.createdAt, queued: true },
+              );
+              if (
+                !res.ok &&
+                res.error === "Wait a few seconds between messages"
+              )
+                left.push(m);
+            } catch (e) {
+              left.push(m);
+            }
+          }
+          writeOutbox(left);
+          renderQuestions();
+        }
+
+        // =============================================================================
+        // The course's questions (top or newest first) with upvote buttons, plus the student's
+        // own questions still waiting to be sent.
+        // =============================================================================
+        async function renderQuestions() {
+          const pending = readOutbox().filter(
+            (m) => m.courseId === course.id && m.email === me.email,
+          );
+          const list = navigator.onLine
+            ? await API.listComments(course.id, me.email)
+            : renderQuestions.list || [];
+          renderQuestions.list = list;
+          const key = JSON.stringify([list, pending.length]);
+          if (key === renderQuestions.last) return;
+          renderQuestions.last = key;
+          const sorted =
+            qSort === "answered"
+              ? list.filter((q) => q.answered || q.reply)
+              : list
+                  .slice()
+                  .sort((a, b) =>
+                    qSort === "top"
+                      ? b.votes - a.votes || b.createdAt - a.createdAt
+                      : b.createdAt - a.createdAt,
+                  );
+          $("#questions").innerHTML =
+            pending
+              .map(
+                (m) => `
+      <article class="q-item" style="opacity:.6">
+        <span class="vote-btn" aria-hidden="true">…</span>
+        <div style="flex:1;min-width:0"><p class="q-text" dir="auto">${questionTextHTML(m.text)}</p><p class="mono muted q-meta" style="font-size:10px">Waiting to send</p></div>
+      </article>`,
+              )
+              .join("") +
+            (sorted.length
+              ? sorted
+                  .map(
+                    (q) => `
+      <article class="q-item">
+        <button type="button" class="vote-btn" data-id="${q.id}" aria-pressed="${q.upvotedByMe}" aria-label="Upvote, ${q.votes} vote${q.votes === 1 ? "" : "s"}" ${q.mine ? "disabled" : ""}>${icon("up", 14, "currentColor", 2.4)}<span>${q.votes}</span></button>
+        <div style="flex:1;min-width:0">
+          <p class="q-text" dir="auto">${questionTextHTML(q.text)}</p>
+          <p class="mono muted q-meta" style="font-size:10px">${[q.mine ? "You" : q.author, q.mine && q.anonymous !== false ? "" : "", fmtTime(q.createdAt).slice(0, 5)].filter(Boolean).map(esc).join(" · ")}${q.answered && !q.reply ? " · Answered" : ""}</p>
+          ${q.reply ? `<div class="reply"><span class="reply-head">Lecturer replied</span><p class="reply-text" dir="auto">${esc(q.reply)}</p></div>` : ""}
+        </div>
+      </article>`,
+                  )
+                  .join("")
+              : pending.length
+                ? ""
+                : `<p class="serif muted" style="font-size:22px;padding:20px 0;border-top:1px solid var(--line)">${qSort === "answered" ? "Nothing answered yet." : "No questions yet. Ask the first one."}</p>`);
+          $all("#questions .vote-btn").forEach((b) =>
+            b.addEventListener("click", async () => {
+              await API.toggleUpvote(b.dataset.id, me.email);
+              renderQuestions();
+            }),
+          );
+        }
+
+        // =============================================================================
+        // How the questions are sorted: top (most upvoted) or newest.
+        // =============================================================================
+        let qSort = "top";
+
+        // =============================================================================
+        // The Top / Newest switch.
+        // =============================================================================
+        $("#q-sort").addEventListener("click", (e) => {
+          const b = e.target.closest("[data-sort]");
+          if (!b) return;
+          qSort = b.dataset.sort;
+          $all("#q-sort [data-sort]").forEach((x) =>
+            x.setAttribute("aria-pressed", x === b),
+          );
+          renderQuestions.last = null;
+          renderQuestions();
+        });
+        $("#q").addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            $("#ask-form").requestSubmit();
+          }
+        });
+
+        // =============================================================================
+        // Sends a question (anonymous unless the student unticks it). Offline, it waits in the
+        // outbox.
+        // =============================================================================
+        $("#ask-form").addEventListener("submit", async (e) => {
+          e.preventDefault();
+          let text = $("#q").value.trim();
+          if (!text) return;
+          if (
+            $("#q-slide").checked &&
+            !$("#q-slide-l").classList.contains("hidden") &&
+            sdDoc
+          )
+            text = `[Slide ${sdSlide}] ${text}`.slice(0, 300);
+          const anonymous = $("#anon").checked;
+          if (!navigator.onLine) {
+            writeOutbox([
+              ...readOutbox(),
+              {
+                courseId: course.id,
+                email: me.email,
+                text,
+                anonymous,
+                createdAt: Date.now(),
+              },
+            ]);
+            $("#q").value = "";
+            renderQuestions();
+            return toast("Saved. It will be sent when you're back online");
+          }
+          const res = await API.addComment(
+            course.id,
+            me.email,
+            text,
+            anonymous,
+          );
+          if (!res.ok) return toast(res.error);
+          $("#q").value = "";
+          $("#q-slide").checked = false;
+          renderQuestions();
+          toast(anonymous ? "Posted anonymously" : "Posted");
+        });
+
+        // =============================================================================
+        // Shows the "offline" banner and sends waiting questions when the connection comes
+        // back.
+        // =============================================================================
+        function updateOnline() {
+          $("#offline-banner").classList.toggle("hidden", navigator.onLine);
+          if (navigator.onLine) flushOutbox();
+        }
+        window.addEventListener("online", updateOnline);
+        window.addEventListener("offline", updateOnline);
+
+        // =============================================================================
+        // The slides and whiteboards the lecturer kept for the class, ready to download.
+        // =============================================================================
+        async function renderMaterials() {
+          const list = await API.listMaterials(course.id).catch(() => []);
+          $("#mat-list").classList.toggle("hidden", !list.length);
+          setHTML(
+            $("#mat-list"),
+            `<span class="label">From the lectures</span>` +
+              list
+                .map(
+                  (m) => `
+      <div class="row" style="gap:12px;align-items:center;padding-top:10px;border-top:1px solid var(--line)">
+        <span style="flex:1" dir="auto"><b style="font-weight:600">${esc(m.title)}</b><br><span class="small muted">${fmtDate(m.createdAt)}${m.size ? ` · ${Math.max(1, Math.round(m.size / 1024 / 1024))} MB` : ""}</span></span>
+        <button type="button" class="btn" data-mat="${esc(m.path)}">Open</button>
+      </div>`,
+                )
+                .join(""),
+          );
+        }
+
+        // =============================================================================
+        // Opens a kept material.
+        // =============================================================================
+        $("#mat-list").addEventListener("click", async (e) => {
+          const b = e.target.closest("[data-mat]");
+          if (!b) return;
+          const w = window.open("", "_blank");
+          try {
+            const url = await API.materialURL(b.dataset.mat);
+            if (w) w.location = url;
+            else location.href = url;
+          } catch (err) {
+            w?.close();
+            toast(err.message);
+          }
+        });
+
+        // =============================================================================
+        // The summaries the lecturer shared, newest first, each one opening in full.
+        // =============================================================================
+        async function renderSummaries() {
+          const list = await API.listSummaries(course.id, { sharedOnly: true });
+          const key = list.map((s) => s.id).join();
+          if (key === renderSummaries.last) return;
+          renderSummaries.last = key;
+          counts.summaries = list.length || 0;
+          drawHead(course);
+          const latest = list[0];
+          $("#sum-mini").classList.toggle("hidden", !latest);
+          if (latest)
+            $("#sum-mini").innerHTML = `
+      <div class="row" style="justify-content:space-between"><span class="label">Latest summary</span><span class="mono" style="font-size:10px;color:var(--on-dark-2)">${esc(latest.label)}</span></div>
+      <p dir="auto" style="margin-top:22px;font-family:var(--serif);font-size:26px;line-height:1.2;unicode-bidi:plaintext">${esc(latest.result.title || "Summary")}</p>
+      <button type="button" class="btn btn-hl" style="margin-top:18px;min-height:42px;border-radius:12px" data-open-sum>Read summary</button>`;
+          $("#sum-list").innerHTML = list.length
+            ? list
+                .map(
+                  (s, i) => `
+      <details class="card" style="padding:20px" ${i === 0 && param("tab") === "summaries" ? "open" : ""}>
+        <summary style="cursor:pointer;list-style:none">
+          <p class="label">${esc(s.label)}</p>
+          <h2 style="font-size:26px;font-weight:800;margin-top:6px" dir="auto">${esc(s.result.title || "Summary")}</h2>
+          <p class="mono" style="color:var(--blue);margin-top:10px;font-size:10px">Read summary</p>
+        </summary>
+        <div class="stack" style="gap:16px;margin-top:12px" dir="auto">${summaryHTML(s.result)}</div>
+        <button class="btn" style="margin-top:14px" data-print="${i}">${icon("print", 16)}Print</button>
+      </details>`,
+                )
+                .join("")
+            : `<p class="serif muted" style="font-size:24px">No summaries yet. <span style="font-style:normal" class="small">They appear here when your lecturer shares them.</span></p>`;
+          $all("#sum-list [data-print]").forEach((b) =>
+            b.addEventListener("click", () => {
+              const s = list[+b.dataset.print],
+                r = s.result;
+              Printer.open({
+                title: r.title || "Summary",
+                sub: s.label,
+                when: "end",
+                done: "Sent to your printer",
+                rows: summaryRows(r),
+                note: r.sections
+                  ? `${(r.nextSteps || []).reduce((n, g) => n + (g.items || []).length, 0)} next steps`
+                  : `${(r.questions || []).length} review questions`,
+                action: () =>
+                  Printer.printHTML(
+                    r.title || "Summary",
+                    `<h1 dir="auto">${esc(r.title || "Summary")}</h1><p class="muted">${esc(course.name)}, ${esc(s.label)}</p><div class="stack" dir="auto">${summaryHTML(r)}</div>`,
+                  ),
+              });
+            }),
+          );
+        }
+
+        $("#sum-mini").addEventListener("click", (e) => {
+          if (e.target.closest("[data-open-sum]")) {
+            showTab("summaries");
+            setTimeout(() => {
+              const d = $("#sum-list details");
+              if (d) d.open = true;
+            }, 50);
+          }
+        });
+
+        // =============================================================================
+        // The student's own attendance in this course: each lecture's mark, why, and a button
+        // to ask the lecturer when a check-in was missed.
+        // =============================================================================
+        async function renderMyAttendance() {
+          const rows = (await API.myAttendance(course.id, me.email)) || [];
+          if (!rows.length) {
+            setHTML(
+              $("#att-mini"),
+              `<span class="label">My attendance</span><p class="serif muted" style="font-size:22px;margin-top:10px">Nothing yet. It starts after your first lecture.</p>`,
+            );
+            return setHTML(
+              $("#my-att"),
+              `<p class="serif muted" style="font-size:24px">No lectures yet. <span class="small" style="font-style:normal">Your record appears here after the first one.</span></p>`,
+            );
+          }
+          const n = { P: 0, H: 0, A: 0 };
+          rows.forEach((r) => n[r.status]++);
+          const pct = Math.round(((n.P + n.H * 0.5) / rows.length) * 100);
+          const LABEL = { P: "Present", H: "Partial", A: "Absent" },
+            SYM = { P: "✓", H: "½", A: "–" };
+          const SYM2 = { P: "✓", H: "½", A: "–" };
+          setHTML(
+            $("#att-mini"),
+            `<div class="row" style="justify-content:space-between;align-items:baseline"><span class="label">My attendance</span><button type="button" class="link-btn mono" style="min-height:0;font-size:10px;letter-spacing:.08em" data-tab-go="attendance">Details</button></div>
+      <div class="big-pct" style="margin-top:12px">${pct}<span class="serif">%</span></div>
+      <div class="att-pills" style="margin-top:14px">${rows
+        .slice(-3)
+        .map(
+          (r) =>
+            `<span class="${r.status}">L${pad2(r.number)} ${SYM2[r.status]}</span>`,
+        )
+        .join("")}</div>`,
+          );
+          // The reason shown next to a mark ("Both checks done", "Missed the second check"...).
+          const why = (r) =>
+            r.status === "P" && r.request === "approved"
+              ? "Approved by the lecturer"
+              : r.status === "P"
+                ? r.secondCheckHappened
+                  ? "Both checks done"
+                  : "Checked in"
+                : r.status === "H"
+                  ? r.check1
+                    ? "Missed the second check"
+                    : "Missed the first check"
+                  : "No check-in";
+          setHTML(
+            $("#my-att"),
+            `
+      <section class="card stack" style="padding:22px; gap:12px">
+        <div class="row" style="justify-content:space-between; align-items:flex-end; flex-wrap:wrap">
+          <div><span class="label">Your attendance</span><div class="big-pct">${pct}<span class="serif">%</span></div></div>
+          <p class="mono muted" style="font-size:10px;text-align:end">${n.P} present · ${n.H} partial · ${n.A} absent<br>of ${rows.length} lecture${rows.length === 1 ? "" : "s"}</p>
+        </div>
+        <div class="hatch-bar" style="margin-top:4px" role="img" aria-label="${pct}% attendance"><span class="p" style="width:${(n.P / rows.length) * 100}%"></span><span class="h" style="width:${(n.H / rows.length) * 100}%"></span></div>
+        <p class="serif muted" style="font-size:17px">Partial counts as half. Only you can see this page.</p>
+      </section>
+      <section class="ruled">
+        ${rows
+          .slice()
+          .reverse()
+          .map(
+            (r) => `
+          <div class="session-row">
+            <div class="session-date"><b>${pad2(new Date(r.startedAt).getDate())}</b><span>${new Date(r.startedAt).toLocaleDateString("en-GB", { month: "short" })}</span></div>
+            <div style="flex:1 1 180px; min-width:0">
+              <p class="s-title" dir="auto">${esc(r.title || "Lecture " + r.number)}</p>
+              <p class="serif muted" style="font-size:17px">${why(r)}${r.check1At ? `, ${fmtTime(r.check1At).slice(0, 5)}` : ""}</p>
+            </div>
+            ${reqUI(r)}
+            <span class="cell ${r.status}" title="${LABEL[r.status]}" aria-label="${LABEL[r.status]}">${SYM[r.status]}</span>
+          </div>`,
+          )
+          .join("")}
+      </section>
+      <p class="small muted">Couldn't check in? Use <b>Ask lecturer</b> on that lecture. Your lecturer decides.</p>`,
+          );
+          counts.attendance = 0;
+          attRows = rows;
+        }
+
+        // =============================================================================
+        // The attendance rows last drawn.
+        // =============================================================================
+        let attRows = [];
+
+        // =============================================================================
+        // What a student can do about a missed check-in: ask, or see the lecturer's answer.
+        // =============================================================================
+        function reqUI(r) {
+          if (r.request === "pending")
+            return '<span class="chip">Request sent</span>';
+          if (r.request === "declined")
+            return '<span class="chip danger" title="Your lecturer declined the request">Declined</span>';
+          if (r.request === "approved" && r.status === "P")
+            return '<span class="chip ok">Approved</span>';
+          return r.status === "P"
+            ? ""
+            : `<button type="button" class="btn" style="min-height:36px" data-ask-att="${r.id}">Ask lecturer</button>`;
+        }
+        $("#att-mini").addEventListener("click", (e) => {
+          if (e.target.closest("[data-tab-go]")) showTab("attendance");
+        });
+
+        // =============================================================================
+        // Sends a request to be marked present.
+        // =============================================================================
+        $("#my-att").addEventListener("click", async (e) => {
+          const b = e.target.closest("[data-ask-att]");
+          if (!b) return;
+          const r = attRows.find((x) => String(x.id) === b.dataset.askAtt);
+          if (r && (await askLecturerForAttendance(r))) renderMyAttendance();
+        });
+
+        // =============================================================================
+        // The course's assignments with their due dates and whether the student handed in.
+        // =============================================================================
+        async function renderHomework() {
+          const list = await API.listAssignments(course.id);
+          const subs = await Promise.all(
+            list.map((a) => API.mySubmission(a.id, me.email)),
+          );
+          setHTML(
+            $("#hw-list"),
+            list.length
+              ? list
+                  .map((a, i) => {
+                    const sub = subs[i];
+                    const max = a.rubric.reduce((s, r) => s + r.points, 0);
+                    const status = !sub
+                      ? '<span class="chip">Not handed in</span>'
+                      : sub.review
+                        ? `<span class="chip ok">${API.totalOf(sub.review)} / ${max}</span>`
+                        : sub.status === "error"
+                          ? '<span class="chip warn">Review failed</span>'
+                          : '<span class="chip accent">Reviewing…</span>';
+                    return `<a class="list-item" href="homework.html?course=${course.code}&a=${a.id}">
+        <div style="flex:1;min-width:0"><p style="font-size:19px;font-weight:700;letter-spacing:-0.02em" dir="auto">${esc(a.title)}</p><p class="mono muted" style="font-size:10px;margin-top:4px">Due ${esc(a.due || "-")}</p></div>
+        ${status}</a>`;
+                  })
+                  .join("")
+              : `<p class="serif muted" style="font-size:24px">No homework yet.</p>`,
+          );
+        }
+
+        // =============================================================================
+        // Runs fn every ms milliseconds, never twice at once, and not while the tab is hidden
+        // or offline. The lecture parts (check-in, poll, questions) refresh often; summaries,
+        // homework and attendance more slowly.
+        // =============================================================================
+        function every(fn, ms) {
+          let busy = false;
+          // One refresh.
+          const run = async () => {
+            if (busy || document.hidden || (!navigator.onLine && API.isRemote))
+              return;
+            busy = true;
+            try {
+              await fn();
+            } catch (e) {
+            } finally {
+              busy = false;
+            }
+          };
+          run();
+          setInterval(run, ms);
+          document.addEventListener("visibilitychange", () => {
+            if (!document.hidden) run();
+          });
+        }
+        every(
+          () => Promise.all([renderCheck(), renderPoll(), renderQuestions()]),
+          API.isRemote ? 3000 : 1000,
+        );
+        every(
+          () =>
+            Promise.all([
+              renderSummaries(),
+              renderMaterials(),
+              renderHomework(),
+              renderMyAttendance(),
+            ]),
+          API.isRemote ? 20000 : 3000,
+        );
+        updateOnline();
+      })();
+    </script>
+    <span id="page-end" hidden></span>
+  </body>
+</html>
