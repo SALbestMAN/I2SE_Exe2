@@ -1,0 +1,272 @@
+<!doctype html>
+<!-- =============================================================================
+     Join requests: students who asked to join a course with its code, and students who
+     could not check in and asked to be marked present. The lecturer approves or refuses
+     each one.
+     ============================================================================= -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <meta name="theme-color" content="#F3F0E8" />
+    <meta name="darkreader-lock" />
+    <title>Requests</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Heebo:wght@400;500;600;700;800;900&family=Frank+Ruhl+Libre:wght@400;500;700&display=swap"
+    />
+    <link rel="stylesheet" href="../css/style.css?v=7.0" />
+    <script src="../js/i18n-strings.js?v=7.0"></script>
+    <script src="../js/i18n.js?v=7.0"></script>
+    <link rel="expect" href="#page-end" blocking="render" />
+  </head>
+  <body>
+    <script>
+      // =============================================================================
+      // Runs before anything is drawn. When the person arrives from (or goes into) the live
+      // room, the curtain sheet is still covering the screen, so it is put back right away
+      // and the page never flashes in between. See js/curtain.js.
+      // =============================================================================
+      try {
+        var cpO = JSON.parse(sessionStorage.getItem("cp.curtain") || "null"),
+          cpN = (performance.getEntriesByType("navigation")[0] || {}).type,
+          cpD = document.body.classList.contains("dark-screen");
+        sessionStorage.removeItem("cp.curtain");
+        if (
+          !cpO &&
+          cpN === "back_forward" &&
+          cpD !== (sessionStorage.getItem("cp.fromDark") === "1")
+        )
+          cpO = { dir: "back", color: "blue" };
+        if (cpO) {
+          var cpC = document.createElement("div");
+          cpC.className =
+            "curtain " +
+            (cpO.color === "ink" ? "ink" : "blue") +
+            (cpO.dir === "back" ? " edge-left" : " edge-right");
+          cpC.setAttribute("aria-hidden", "true");
+          cpC.dataset.dir = cpO.dir;
+          cpC.dataset.mode = "slide";
+          document.body.prepend(cpC);
+        }
+      } catch (e) {}
+    </script>
+    <div id="topbar"></div>
+    <main class="container">
+      <header class="page-head">
+        <div>
+          <span class="kicker" id="kicker">&nbsp;</span>
+          <h1 class="page-title">
+            Waiting <span class="serif">on <span class="hl">you.</span></span>
+          </h1>
+        </div>
+      </header>
+      <section aria-labelledby="join-h">
+        <div
+          class="row wrap"
+          style="
+            justify-content: space-between;
+            align-items: baseline;
+            border-bottom: 2px solid var(--ink);
+            padding-bottom: 10px;
+          "
+        >
+          <h2
+            id="join-h"
+            class="sx-title"
+            style="font-size: 30px; font-weight: 900; letter-spacing: -0.045em"
+          >
+            Join <span class="serif">requests</span>
+          </h2>
+          <span class="mono muted" style="font-size: 10px"
+            >Their Google email wasn't on the course list</span
+          >
+        </div>
+        <div id="joins"></div>
+      </section>
+      <section aria-labelledby="att-h">
+        <div
+          class="row wrap"
+          style="
+            justify-content: space-between;
+            align-items: baseline;
+            border-bottom: 2px solid var(--ink);
+            padding-bottom: 10px;
+          "
+        >
+          <h2
+            id="att-h"
+            class="sx-title"
+            style="font-size: 30px; font-weight: 900; letter-spacing: -0.045em"
+          >
+            Mark me <span class="serif">present</span>
+          </h2>
+          <span class="mono muted" style="font-size: 10px"
+            >Students who couldn't check in</span
+          >
+        </div>
+        <div id="atts"></div>
+      </section>
+    </main>
+    <script src="../js/config.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/api-supabase.js?v=7.0"></script>
+    <script src="../js/ui.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+    <script src="../js/curtain.js?v=7.0"></script>
+    <script src="../js/motion.js?v=7.0"></script>
+    <script>
+      // =============================================================================
+      // The requests page's code.
+      // =============================================================================
+      (async () => {
+        renderTopbar("requests");
+
+        // =============================================================================
+        // The two lists on this page: join requests and attendance requests.
+        // =============================================================================
+        let data = { joins: [], atts: [] };
+
+        // =============================================================================
+        // The line shown when a list is empty.
+        // =============================================================================
+        const empty = (t) =>
+          `<p class="serif muted" style="font-size:22px;padding:18px 0">${t}</p>`;
+
+        // =============================================================================
+        // Draws both lists of requests, each with Approve and Refuse buttons.
+        // =============================================================================
+        function draw() {
+          const { joins, atts } = data;
+          setText(
+            $("#kicker"),
+            `${joins.length} to join · ${atts.length} to mark present`,
+          );
+          setHTML(
+            $("#joins"),
+            joins.length
+              ? joins
+                  .map(
+                    ({ r, c }) => `
+      <div class="session-row">
+        <span class="avatar" style="width:44px;height:44px">${esc(initials(r.name || r.email))}</span>
+        <div style="flex:1 1 220px;min-width:0"><p class="s-title" dir="auto">${esc(r.name || r.email)}</p>
+          <p class="mono muted" style="font-size:11px;text-transform:none;letter-spacing:.02em" dir="ltr">${esc(r.email)} · ${esc(c.name)}</p></div>
+        <div class="s-actions"><button class="btn" data-deny="${esc(r.email)}" data-c="${c.id}">Decline</button><button class="btn btn-primary" data-approve="${esc(r.email)}" data-c="${c.id}">Let in</button></div>
+      </div>`,
+                  )
+                  .join("")
+              : empty("No one is waiting to join."),
+          );
+          setHTML(
+            $("#atts"),
+            atts.length
+              ? atts
+                  .map(
+                    ({ q, c }) => `
+      <div class="session-row" style="align-items:flex-start">
+        <div class="session-date"><b>${pad2(q.number)}</b><span>Lecture</span></div>
+        <div style="flex:1 1 240px;min-width:0">
+          <p class="s-title" dir="auto">${esc(q.name || q.email)}${q.group ? ` <span class="mono muted" style="font-size:10px">group ${esc(q.group)}</span>` : ""}</p>
+          <p class="serif" style="font-size:20px;margin-top:2px;text-align:left" dir="auto">“${esc(q.reason)}”</p>
+          <p class="mono muted" style="font-size:10px;margin-top:6px">${esc(c.name)} · asked ${fmtDate(q.createdAt)} ${fmtTime(q.createdAt).slice(0, 5)}</p>
+        </div>
+        <div class="s-actions"><button class="btn" data-decide="${q.id}" data-ok="0">Decline</button><button class="btn btn-primary" data-decide="${q.id}" data-ok="1">Mark present</button></div>
+      </div>`,
+                  )
+                  .join("")
+              : empty("Nobody asked to be marked present."),
+          );
+        }
+
+        // =============================================================================
+        // The Approve and Refuse buttons on both lists.
+        // =============================================================================
+        document.querySelector("main").addEventListener("click", async (e) => {
+          const a = e.target.closest("[data-approve]"),
+            d = e.target.closest("[data-deny]"),
+            q = e.target.closest("[data-decide]");
+          if (a) {
+            a.disabled = true;
+            await API.approveRequest(a.dataset.c, a.dataset.approve);
+            toast("Let in. They can open the course now.");
+            render();
+          }
+          if (
+            d &&
+            (await ask({
+              title: "Decline this request?",
+              message: `${d.dataset.deny} won't be added to the course. They can ask again with the code.`,
+              confirm: "Decline",
+              danger: true,
+            }))
+          ) {
+            await API.removeStudent(d.dataset.c, d.dataset.deny);
+            toast("Request declined");
+            render();
+          }
+          if (q) {
+            q.closest(".session-row")
+              .querySelectorAll("button")
+              .forEach((x) => (x.disabled = true));
+            const res = await API.decideAttendanceRequest(
+              q.dataset.decide,
+              q.dataset.ok === "1",
+            );
+            if (res && !res.ok) toast(res.error);
+            else
+              toast(
+                q.dataset.ok === "1" ? "Marked present" : "Request declined",
+              );
+            render();
+          }
+        });
+
+        // =============================================================================
+        // Loads the requests of all the lecturer's courses and draws them.
+        // =============================================================================
+        async function render() {
+          const courses = await API.listCourses();
+          const per = await Promise.all(
+            courses.map(async (c) => ({
+              c,
+              roster: await API.getRoster(c.id),
+              reqs: await API.listAttendanceRequests(c.id).catch(() => []),
+            })),
+          );
+          data = {
+            joins: per.flatMap(({ c, roster }) =>
+              roster
+                .filter((r) => r.status === "request")
+                .map((r) => ({ r, c: { id: c.id, name: c.name } })),
+            ),
+            atts: per.flatMap(({ c, reqs }) =>
+              (reqs || [])
+                .filter((q) => q.status === "pending")
+                .map((q) => ({ q, c: { id: c.id, name: c.name } })),
+            ),
+          };
+          cacheSet("requests", data);
+          draw();
+        }
+
+        // =============================================================================
+        // Shows what this tab saw last time, then loads fresh data and keeps refreshing.
+        // =============================================================================
+        const cached = cacheGet("requests");
+        if (cached) {
+          data = cached;
+          draw();
+          bootDone();
+        }
+        render();
+        API.onChange(render);
+      })();
+    </script>
+    <span id="page-end" hidden></span>
+  </body>
+</html>
