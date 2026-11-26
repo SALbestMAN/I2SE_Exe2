@@ -8,6 +8,6 @@
 // key (Project Settings, API Keys) between the quotes below.
 // =============================================================================
 window.CP_CONFIG = {
-  supabaseUrl: "",
-  supabaseKey: "",
+  supabaseUrl: "https://ohdcimoymnnjbogkomei.supabase.co",
+  supabaseKey: "sb_publishable_JXbq6pFvXv6N6G6rPFT3tw_YL9SRwwl",
 };
