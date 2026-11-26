@@ -77,3 +77,15 @@ docs/                 project documents
 
 The secret key, the service_role key, the database password and the Google client secret never go into this repository. Neither does the real student list.
 
+## Tests
+
+There are 62 tests in three groups. On the last run (26 Nov 2026) all of them passed. The test IDs match the [testing strategy](docs/testing-strategy.md).
+
+| Folder | What it tests | Tests | You need | Run |
+| --- | --- | --- | --- | --- |
+| `tests/db/` | The real `supabase/schema.sql` on PostgreSQL | 39 | PostgreSQL 14+ and `psql` | `tests/db/run.sh` |
+| `tests/unit/` | The browser code in Node, no network | 16 | Node.js 18+ | `node --test tests/unit/unit.test.js` |
+| `tests/e2e/` | The real pages in a headless browser, with sample data | 7 | Node.js, Playwright, and Python with OpenCV for the QR test | Start `tests/e2e/serve-test-site.sh`, then in a second terminal `node --test --test-concurrency=1 tests/e2e/e2e.test.js` |
+
+`tests/db/run.sh` deletes and recreates a database called `cp_test` each time, so run it only on a local test database. The output of the last run is in `tests/results/`. All test data uses invented names and emails.
+
