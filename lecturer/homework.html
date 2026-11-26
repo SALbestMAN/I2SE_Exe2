@@ -21,7 +21,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Heebo:wght@400;500;600;700;800;900&family=Frank+Ruhl+Libre:wght@400;500;700&display=swap"
     />
     <link rel="stylesheet" href="../css/style.css?v=7.0" />
-    <script src="../js/i18n-strings.js?v=7.0"></script>
+    <script src="../js/i18n-strings.js?v=7.1"></script>
     <script src="../js/i18n.js?v=7.0"></script>
     <link rel="expect" href="#page-end" blocking="render" />
   </head>
@@ -65,7 +65,7 @@
     <script src="../js/config.js?v=7.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../js/api-supabase.js?v=7.0"></script>
-    <script src="../js/ai.js?v=7.1"></script>
+    <script src="../js/ai.js?v=7.2"></script>
     <script src="../js/files.js?v=7.0"></script>
     <script src="../js/csv.js?v=7.0"></script>
     <script src="../js/printer.js?v=7.0"></script>
@@ -387,75 +387,99 @@
         }
 
         // =============================================================================
-        // Who did the work, as the work itself says (the review reads the README, the title
-        // page or the file headers): alone or a pair.
+        // Who did the work together. Nothing is shown for work done alone. Two or more
+        // different people count as "together" when they wrote commits in the student's
+        // repository, or when the work itself names them ("by X and Y"). One person written
+        // two ways ("dniel1754-hub", "Daniel") counts once. AI tools, the lecturer, and names
+        // that also appear in the assignment (a template's author) never count.
         // =============================================================================
-        // Who did the work: "Alone" for everyone, unless the work itself clearly names at
-        // least one other person who did it with them. Names that are really the same person
-        // ("aviya1221", "Aviya", "aviya1221 (repository owner)") count once. Names that also
-        // appear in the assignment (the lecturer, the course, a template's author) do not
-        // count, and neither does the student's own email name.
-        // =============================================================================
-        function same(p, k, stem) {
-          if (p.k.includes(k) || k.includes(p.k)) return true;
-          return (
-            p.stem.length >= 4 &&
-            stem.length >= 4 &&
-            (p.stem.startsWith(stem) || stem.startsWith(p.stem))
-          );
-        }
-        function teamOf(rv, a, email) {
-          const t = rv?.team || {};
-          const key = (n) =>
-            String(n || "")
-              .toLowerCase()
-              .replace(/\(.*?\)/g, " ")
-              .replace(/@.*/, "")
-              .replace(/[^\p{L}\p{N}]+/gu, "");
-          const known = key(
-            (a?.briefText || "") +
-              " " +
-              (a?.instructions || "") +
-              " " +
-              (a?.title || ""),
-          );
-          const me = key(email);
-          const people = [];
-          for (const raw of t.names || []) {
-            const name = String(raw)
-                .replace(/\(.*?\)/g, "")
-                .trim(),
-              k = key(name);
-            if (k.length < 3) continue;
-            if (k.length >= 5 && known.includes(k)) continue;
-            const stem = (name.toLowerCase().match(/\p{L}+/u) || [""])[0];
-            if (people.some((p) => same(p, k, stem))) continue;
-            people.push({ k, stem, name });
-          }
-          const meStem = (String(email || "")
+        const keyOf = (n) =>
+          String(n || "")
+            .toLowerCase()
+            .replace(/\(.*?\)/g, " ")
+            .replace(/@.*/, "")
+            .replace(/[^\p{L}\p{N}]+/gu, "");
+        const stemOf = (n) =>
+          (String(n || "")
             .toLowerCase()
             .match(/\p{L}+/u) || [""])[0];
-          const others = people.filter(
-            (p) => !(me && same({ k: me, stem: meStem }, p.k, p.stem)),
-          );
-          const together =
-            t.alone !== true && people.length >= 2 && others.length >= 1;
-          return {
-            alone: !together,
-            names: people.map((p) => p.name),
-            where: t.where || "",
+        const alike = (x, y) =>
+          x.k.includes(y.k) ||
+          y.k.includes(x.k) ||
+          (x.s.length >= 4 &&
+            y.s.length >= 4 &&
+            (x.s.startsWith(y.s) || y.s.startsWith(x.s)));
+        const samePerson = (p, q) =>
+          p.ids.some((x) => q.ids.some((y) => alike(x, y)));
+        const person = (aliases, name) => ({
+          name,
+          ids: aliases
+            .filter(Boolean)
+            .map((x) => ({ k: keyOf(x), s: stemOf(x) }))
+            .filter((x) => x.k.length >= 3),
+        });
+        const repoPeople = new Map();
+        function teamOf(rv, a, r) {
+          const known = keyOf(
+              `${a?.briefText || ""} ${a?.instructions || ""} ${a?.title || ""}`,
+            ),
+            staff = keyOf(course.lecturerEmail);
+          const tool =
+            /^(claude|claudecode|anthropic|copilot|githubcopilot|chatgpt|openai|gemini|cursor|codex|devin|github|githubactions|dependabot)$/;
+          const outsider = (p) =>
+            p.ids.some(
+              (x) =>
+                tool.test(x.k) ||
+                (x.k.length >= 5 && known.includes(x.k)) ||
+                (staff && x.k === staff),
+            );
+          const collect = (list) => {
+            const out = [];
+            for (const p of list) {
+              if (!p.ids.length || outsider(p)) continue;
+              const twin = out.find((q) => samePerson(p, q));
+              if (twin) twin.ids.push(...p.ids);
+              else out.push(p);
+            }
+            return out;
           };
+          const me = person([r.email, r.name], r.label);
+          const pick = (list, where) =>
+            list.length >= 2 && list.some((p) => !samePerson(p, me))
+              ? {
+                  names: list.map((p) =>
+                    samePerson(p, me) ? me.name : p.name,
+                  ),
+                  where,
+                }
+              : null;
+          const committers = rv?.people || repoPeople.get(r.link) || [];
+          const fromRepo = collect(
+            committers.map((c) =>
+              person(
+                [c.login, c.name],
+                c.name && c.login
+                  ? `${c.name} (${c.login})`
+                  : c.name || c.login,
+              ),
+            ),
+          );
+          const fromWork =
+            rv?.team?.alone === true
+              ? []
+              : collect(
+                  (rv?.team?.names || []).map((n) => {
+                    const t = String(n)
+                      .replace(/\(.*?\)/g, "")
+                      .trim();
+                    return person([t], t);
+                  }),
+                );
+          return (
+            pick(fromRepo, "repository commits") ||
+            pick(fromWork, rv?.team?.where || "")
+          );
         }
-
-        // =============================================================================
-        // A small "Alone" or "Pair" label for the table.
-        // =============================================================================
-        const teamChip = (t) =>
-          !t
-            ? ""
-            : t.alone
-              ? '<span class="chip">Alone</span>'
-              : `<span class="chip accent" title="${esc(t.names.join(", "))}">Pair${t.names.length > 2 ? ` (${t.names.length})` : ""}</span>`;
 
         // =============================================================================
         // The state of the assignment page: the student whose review is open, whether a redraw
@@ -525,7 +549,7 @@
           rows.forEach(
             (x) => (x.label = x.name || x.email.split("@")[0] || "Unnamed"),
           );
-          rows.forEach((x) => (x.team = teamOf(x.sub?.review, a, x.email)));
+          rows.forEach((x) => (x.team = teamOf(x.sub?.review, a, x)));
           rows.sort((x, y) => x.label.localeCompare(y.label, "he"));
           return rows;
         }
@@ -764,7 +788,7 @@
                     .map(
                       (r) => `
               <tr class="clickable ${r.key === selected ? "selected" : ""}" data-key="${esc(r.key)}" tabindex="0">
-                <td><span dir="auto" style="font-weight:600">${esc(r.label)}</span> ${teamChip(r.team)}${r.email && r.name ? `<br><span class="small muted">${esc(r.email)}</span>` : ""}</td>
+                <td><span dir="auto" style="font-weight:600">${esc(r.label)}</span>${r.email && r.name ? `<br><span class="small muted">${esc(r.email)}</span>` : ""}</td>
                 ${groups.length ? `<td class="muted">${esc(r.group || "-")}</td>` : ""}
                 <td><div class="row wrap" style="gap:6px">
                   ${r.link ? `<a class="chip" href="${esc(r.link)}" target="_blank" rel="noopener" data-stop title="${esc(r.link)}">${icon("link", 12)} ${esc(shortLink(r.link))}</a>` : ""}
@@ -968,7 +992,7 @@
           return `<h1 dir="auto">${esc(r.label)}</h1>
       <p class="muted">${esc(r.email || "")}${r.group ? " · group " + esc(r.group) : ""}${r.link ? " · " + esc(r.link) : ""}</p>
       <h2>${API.totalOf(rv)} / ${maxOf(a)}</h2><p dir="auto">${esc(rv.summary || "")}</p>
-      ${r.team ? `<p dir="auto"><b>${r.team.alone ? "Done alone" : "Done together"}${r.team.names.length ? ":" : ""}</b> ${esc(r.team.names.join(", "))}</p>` : ""}
+      ${r.team ? `<p dir="auto"><b>Done together:</b> ${esc(r.team.names.join(", "))}</p>` : ""}
       ${(rv.requirements || []).length ? `<h3>The assignment, point by point</h3><ul>${rv.requirements.map((q) => `<li dir="auto">${{ done: "✓", partial: "◐", missing: "✗" }[q.status] || "·"} ${esc(q.item)}${q.note ? ` <span class="muted">(${esc(q.note)})</span>` : ""}</li>`).join("")}</ul>` : ""}
       ${(rv.strengths || []).length ? `<h3>Good</h3>${li(rv.strengths)}` : ""}
       ${(rv.improvements || []).length ? `<h3>To improve</h3>${li(rv.improvements)}` : ""}
@@ -991,7 +1015,7 @@
           });
           if (!choice) return;
           const table = `<h1 dir="auto">${esc(a.title)}</h1><p class="muted">${esc(course.name)} · ${reviewed.length} reviewed of ${rows.length}</p>
-      <table><tr><th>Student</th><th>Email</th><th>Group</th><th>Done by</th><th>Score</th></tr>${rows.map((r) => `<tr><td dir="auto">${esc(r.label)}</td><td>${esc(r.email || "")}</td><td>${esc(r.group || "")}</td><td dir="auto">${r.team ? (r.team.alone ? "alone" : esc(r.team.names.join(", ") || "a pair")) : ""}</td><td>${r.sub?.review ? API.totalOf(r.sub.review) + " / " + max : r.sub || r.link ? "not reviewed" : "nothing handed in"}</td></tr>`).join("")}</table>`;
+      <table><tr><th>Student</th><th>Email</th><th>Group</th><th>Score</th></tr>${rows.map((r) => `<tr><td dir="auto">${esc(r.label)}</td><td>${esc(r.email || "")}</td><td>${esc(r.group || "")}</td><td>${r.sub?.review ? API.totalOf(r.sub.review) + " / " + max : r.sub || r.link ? "not reviewed" : "nothing handed in"}</td></tr>`).join("")}</table>`;
           const everything = choice === true;
           const pages = everything
             ? reviewed
@@ -1287,6 +1311,24 @@
           const s = r.sub,
             rv = s?.review,
             c = s?.comparison;
+          // Older reviews don't have the repository's committers yet: read them once, then redraw.
+          if (
+            rv &&
+            !rv.people &&
+            r.link &&
+            AI.parseRepo(r.link) &&
+            !repoPeople.has(r.link)
+          ) {
+            repoPeople.set(r.link, []);
+            AI.repoPeople(r.link).then((list) => {
+              repoPeople.set(r.link, list);
+              rows.forEach((x) => {
+                if (x.link === r.link) x.team = teamOf(x.sub?.review, a, x);
+              });
+              if (selected === r.key && list.length > 1)
+                renderReview(a, rows, st);
+            });
+          }
           // Turns an anonymous classmate label (P1, P2...) back into the student's name, for the lecturer
           // only.
           const nameOf = (label) => {
@@ -1316,7 +1358,7 @@
           ? `
         <p style="font:700 34px var(--display);line-height:1">${API.totalOf(rv)} <span class="muted" style="font-size:16px">/ ${maxOf(a)}</span></p>
         <p style="font-size:15px;line-height:1.55" dir="auto">${esc(rv.summary || "")}</p>
-        ${r.team ? `<p class="small" dir="auto"><b>${r.team.alone ? "Done alone" : "Done together"}${r.team.names.length ? ":" : ""}</b> ${r.team.names.map(esc).join(", ")}${r.team.where ? ` <span class="muted">(${esc(r.team.where)})</span>` : ""}</p>` : `<p class="small muted">The work doesn't say who did it.</p>`}
+        ${r.team ? `<p class="small" dir="auto"><b>Done together:</b> ${r.team.names.map(esc).join(", ")}${r.team.where ? ` <span class="muted">(${esc(r.team.where)})</span>` : ""}</p>` : ""}
         ${a.rubric.length > 1 ? rv.criteria.map((x) => `<div class="row" style="justify-content:space-between;gap:8px"><span class="small">${esc(x.name)}</span><b class="small">${x.score} / ${x.max}</b></div>`).join("") : ""}
         ${(rv.requirements || []).length ? `<div class="stack" style="gap:6px"><p class="label">The assignment, point by point</p>${rv.requirements.map((q) => `<div class="req-line ${esc(q.status)}" dir="auto"><b>${{ done: "✓", partial: "◐", missing: "✗" }[q.status] || "·"}</b><span>${esc(q.item)}${q.note ? `<em>${esc(q.note)}</em>` : ""}</span></div>`).join("")}</div>` : ""}
         ${(rv.strengths || []).length ? `<div class="stack" style="gap:4px"><p class="label">Good</p><ul class="plain-list">${rv.strengths.map((x) => `<li dir="auto">${esc(x)}</li>`).join("")}</ul></div>` : ""}
