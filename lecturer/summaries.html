@@ -1,0 +1,708 @@
+<!doctype html>
+<!-- =============================================================================
+     Lecture summaries on the lecturer's side. The lecturer gives a recording (a Zoom,
+     Drive or YouTube link, an uploaded file, or a transcript), chooses the languages,
+     and the AI writes a summary. Summaries can be shared with students, printed or
+     deleted. Slides and whiteboards kept from lectures are listed here too.
+     ============================================================================= -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <meta name="theme-color" content="#F3F0E8" />
+    <meta name="darkreader-lock" />
+    <title>Summaries</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Heebo:wght@400;500;600;700;800;900&family=Frank+Ruhl+Libre:wght@400;500;700&display=swap"
+    />
+    <link rel="stylesheet" href="../css/style.css?v=7.0" />
+    <script src="../js/i18n-strings.js?v=7.0"></script>
+    <script src="../js/i18n.js?v=7.0"></script>
+    <link rel="expect" href="#page-end" blocking="render" />
+  </head>
+  <body>
+    <script>
+      // =============================================================================
+      // Runs before anything is drawn. When the person arrives from (or goes into) the live
+      // room, the curtain sheet is still covering the screen, so it is put back right away
+      // and the page never flashes in between. See js/curtain.js.
+      // =============================================================================
+      try {
+        var cpO = JSON.parse(sessionStorage.getItem("cp.curtain") || "null"),
+          cpN = (performance.getEntriesByType("navigation")[0] || {}).type,
+          cpD = document.body.classList.contains("dark-screen");
+        sessionStorage.removeItem("cp.curtain");
+        if (
+          !cpO &&
+          cpN === "back_forward" &&
+          cpD !== (sessionStorage.getItem("cp.fromDark") === "1")
+        )
+          cpO = { dir: "back", color: "blue" };
+        if (cpO) {
+          var cpC = document.createElement("div");
+          cpC.className =
+            "curtain " +
+            (cpO.color === "ink" ? "ink" : "blue") +
+            (cpO.dir === "back" ? " edge-left" : " edge-right");
+          cpC.setAttribute("aria-hidden", "true");
+          cpC.dataset.dir = cpO.dir;
+          cpC.dataset.mode = "slide";
+          document.body.prepend(cpC);
+        }
+      } catch (e) {}
+    </script>
+    <div id="topbar"></div>
+    <main class="container">
+      <div id="course-head" data-tab="summaries"></div>
+      <div
+        class="row wrap"
+        style="justify-content: space-between; align-items: center"
+      >
+        <h2 class="section-title">Lecture summaries</h2>
+        <button class="btn" id="ai-btn"></button>
+      </div>
+
+      <section class="card stack" style="padding: 24px; gap: 16px">
+        <h2 style="font-size: 19px">Summarize a recording</h2>
+        <form class="stack" style="gap: 16px" id="sum-form">
+          <div
+            class="row wrap"
+            style="gap: 8px"
+            role="group"
+            aria-label="Source"
+          >
+            <button
+              type="button"
+              class="btn src-btn"
+              data-src="link"
+              aria-pressed="true"
+            >
+              Link (Zoom / Drive / YouTube)
+            </button>
+            <button
+              type="button"
+              class="btn src-btn"
+              data-src="media"
+              aria-pressed="false"
+            >
+              Upload a recording
+            </button>
+            <button
+              type="button"
+              class="btn src-btn"
+              data-src="transcript"
+              aria-pressed="false"
+            >
+              Transcript (text)
+            </button>
+          </div>
+
+          <div id="src-link" class="stack" style="gap: 8px">
+            <label class="field"
+              >Recording link
+              <input
+                type="url"
+                id="rec-link"
+                placeholder="https://zoom.us/rec/share/…  or a Google Drive / YouTube link"
+            /></label>
+            <p class="small muted" style="line-height: 1.5">
+              <b>Zoom:</b> paste the recording's share link. It has to open
+              without signing in and without a passcode. If Zoom made a
+              transcript, that is used (about a minute); if not, the video is
+              copied over (a few minutes for a long lecture).<br />
+              <b>Google Drive:</b> Share → General access → "Anyone with the
+              link".<br />
+              <b>YouTube:</b> public or unlisted videos.
+            </p>
+          </div>
+
+          <div id="src-media" class="stack hidden" style="gap: 8px">
+            <label class="dropzone" for="media-input" style="cursor: pointer">
+              <span id="media-icon"></span>
+              <div style="flex: 1; min-width: 180px">
+                <p style="font-weight: 600" id="media-name">
+                  Choose the lecture recording
+                </p>
+                <p class="small muted">
+                  mp3, m4a, wav, mp4, webm… Download it from Zoom / Drive first.
+                </p>
+              </div>
+              <span class="btn">Choose file</span>
+              <input
+                type="file"
+                id="media-input"
+                accept="audio/*,video/*"
+                class="sr-only"
+              />
+            </label>
+          </div>
+
+          <div id="src-transcript" class="stack hidden" style="gap: 8px">
+            <label class="field"
+              >Transcript (paste, or load a .txt / .vtt / .srt file)
+              <textarea
+                id="transcript"
+                class="input"
+                style="height: 140px; padding: 10px 12px; resize: vertical"
+                dir="auto"
+                placeholder="Paste the Zoom / Meet transcript here"
+              ></textarea>
+            </label>
+            <label class="btn" style="align-self: flex-start; cursor: pointer"
+              >Load file<input
+                type="file"
+                id="tr-file"
+                accept=".txt,.vtt,.srt,text/plain"
+                class="sr-only"
+            /></label>
+          </div>
+
+          <div class="grid-3">
+            <label class="field">Lecture<select id="lecture"></select></label>
+            <label class="field"
+              >Spoken language<select id="spoken">
+                <option>Hebrew with English terms</option>
+                <option>Hebrew</option>
+                <option>English</option>
+                <option>Arabic with English terms</option>
+                <option>Arabic</option>
+              </select></label
+            >
+            <label class="field"
+              >Summary language<select id="out-lang">
+                <option>Hebrew with English terms</option>
+                <option>Hebrew</option>
+                <option>English</option>
+                <option>Arabic with English terms</option>
+                <option>Arabic</option>
+              </select></label
+            >
+          </div>
+
+          <div class="row" style="justify-content: flex-end">
+            <button class="btn btn-primary btn-lg" id="start-btn">
+              Start summary
+            </button>
+          </div>
+          <div
+            id="job-log"
+            class="hidden"
+            style="
+              font:
+                13px/1.6 ui-monospace,
+                Menlo,
+                monospace;
+              background: #0e1116;
+              color: var(--on-dark-2);
+              border-radius: 12px;
+              padding: 12px 14px;
+              max-height: 220px;
+              overflow: auto;
+            "
+          ></div>
+        </form>
+      </section>
+
+      <div class="split">
+        <section class="side stack" style="gap: 10px; flex: 1 1 300px">
+          <h2 style="font-size: 17px">Summaries</h2>
+          <div class="stack" style="gap: 10px" id="list"></div>
+          <!-- =============================================================================
+           Slides and whiteboards kept for the class when a lecture ended.
+           ============================================================================= -->
+          <div
+            class="stack hidden"
+            style="gap: 8px; margin-top: 14px"
+            id="mat-box"
+          >
+            <h2 style="font-size: 17px">Shared from lectures</h2>
+            <div class="stack" style="gap: 8px" id="mat-list"></div>
+          </div>
+        </section>
+        <article
+          class="main card stack"
+          style="padding: 24px; gap: 18px"
+          id="summary"
+        >
+          <p class="muted">Pick a summary on the left, or make a new one.</p>
+        </article>
+      </div>
+    </main>
+
+    <script src="../js/config.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/api-supabase.js?v=7.0"></script>
+    <script src="../js/ai.js?v=7.0"></script>
+    <script src="../js/ui.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+    <script src="../js/curtain.js?v=7.0"></script>
+    <script src="../js/motion.js?v=7.0"></script>
+    <script src="../js/printer.js?v=7.0"></script>
+    <script>
+      // =============================================================================
+      // The summaries page's code.
+      // =============================================================================
+      (async () => {
+        renderTopbar();
+        const course = await getCourse();
+        if (!course) {
+          $("main").innerHTML =
+            '<p class="muted">No courses yet. <a href="courses.html">Create one</a>.</p>';
+          return;
+        }
+
+        // =============================================================================
+        // Where the recording comes from (a link, a file or a transcript), the file picked,
+        // and the summary that is open.
+        // =============================================================================
+        let source = "link",
+          mediaFile = null,
+          selected = null;
+        const running = new Map();
+
+        // =============================================================================
+        // Updates the text of the AI settings button. The summaries this page is working on
+        // right now are kept next to it, with their latest step.
+        // =============================================================================
+        const updateAIBtn = () => setText($("#ai-btn"), aiStatusText());
+        $("#ai-btn").addEventListener("click", () =>
+          openAISettings(updateAIBtn),
+        );
+        updateAIBtn();
+        $("#media-icon").innerHTML = icon("file", 32, "#1D1D1F", 1.6);
+
+        // =============================================================================
+        // The lecture options in the form, from the course's lectures.
+        // =============================================================================
+        const sessions = await API.listSessions(course.id);
+        $("#lecture").innerHTML =
+          sessions
+            .filter((s) => s.startedAt)
+            .map(
+              (s) =>
+                `<option>${esc(s.title)}, ${fmtDate(s.startedAt)}</option>`,
+            )
+            .reverse()
+            .join("") + `<option>Other recording</option>`;
+
+        // =============================================================================
+        // Switches between the three sources: link, file, transcript.
+        // =============================================================================
+        $all(".src-btn").forEach((b) =>
+          b.addEventListener("click", () => {
+            source = b.dataset.src;
+            $all(".src-btn").forEach((x) => {
+              x.setAttribute("aria-pressed", String(x === b));
+              x.classList.toggle("btn-soft", x === b);
+            });
+            $("#src-media").classList.toggle("hidden", source !== "media");
+            $("#src-link").classList.toggle("hidden", source !== "link");
+            $("#src-transcript").classList.toggle(
+              "hidden",
+              source !== "transcript",
+            );
+          }),
+        );
+        $(".src-btn").classList.add("btn-soft");
+
+        // =============================================================================
+        // Shows the recording file that was picked.
+        // =============================================================================
+        $("#media-input").addEventListener("change", (e) => {
+          mediaFile = e.target.files[0] || null;
+          setText(
+            $("#media-name"),
+            mediaFile
+              ? `${mediaFile.name}, ${(mediaFile.size / 1048576).toFixed(1)} MB`
+              : "Choose the lecture recording",
+          );
+        });
+
+        // =============================================================================
+        // Reads a transcript file into the text box.
+        // =============================================================================
+        $("#tr-file").addEventListener("change", (e) => {
+          const f = e.target.files[0];
+          if (!f) return;
+          const fr = new FileReader();
+          fr.onload = () => {
+            $("#transcript").value = String(fr.result);
+            toast(`Loaded ${f.name}`);
+          };
+          fr.readAsText(f, "utf-8");
+        });
+
+        // =============================================================================
+        // Starts a summary: saves a "working" entry, runs the AI with live progress messages,
+        // then saves the result (or a clear error).
+        // =============================================================================
+        $("#sum-form").addEventListener("submit", async (e) => {
+          e.preventDefault();
+          if (!AI.ready()) return openAISettings(updateAIBtn);
+          const text = $("#transcript").value.trim();
+          const link = $("#rec-link").value.trim();
+          if (source === "link" && !/^https?:\/\//.test(link))
+            return toast("Paste the recording link first");
+          if (source === "media" && !mediaFile)
+            return toast("Choose a recording first");
+          if (source === "transcript" && text.length < 200)
+            return toast("The transcript looks too short");
+          const opts = {
+            spoken: $("#spoken").value,
+            outLang: $("#out-lang").value,
+            terms: [],
+          };
+          const logEl = $("#job-log");
+          logEl.innerHTML = "";
+          logEl.classList.remove("hidden");
+          const t00 = Date.now();
+          // Adds a line to the progress log, with the seconds since the start.
+          const log = (msg, bad) => {
+            const t = ((Date.now() - t00) / 1000).toFixed(1).padStart(5, " ");
+            logEl.insertAdjacentHTML(
+              "beforeend",
+              `<div style="color:${bad ? "var(--d-danger)" : "inherit"}">${t}s  ${esc(msg)}</div>`,
+            );
+            logEl.scrollTop = logEl.scrollHeight;
+          };
+          log(`Model: ${AI.settings().model}, source: ${source}`);
+          const btn = $("#start-btn");
+          btn.disabled = true;
+          btn.textContent = "Working…";
+          let job;
+          try {
+            job = await API.createSummary(course.id, {
+              label: $("#lecture").value,
+              source,
+              fileName:
+                source === "media"
+                  ? mediaFile.name
+                  : source === "link"
+                    ? link.replace(/^https?:\/\//, "").slice(0, 60)
+                    : "transcript",
+              ...opts,
+            });
+          } catch (e) {
+            log("Couldn't start: " + e.message, true);
+            btn.disabled = false;
+            btn.textContent = "Start summary";
+            return;
+          }
+          running.set(job.id, "Starting…");
+          selected = job.id;
+          renderList();
+          renderSummary();
+          toast("Working on it. Keep this page open until it's done.");
+          const t0 = Date.now();
+          let lastMsg = "Starting…";
+          // Saves the current step and the time so far, so the list shows the progress.
+          const tick = () =>
+            API.updateSummary(job.id, {
+              step: `${lastMsg}, ${Math.floor((Date.now() - t0) / 60000)}:${String(Math.floor((Date.now() - t0) / 1000) % 60).padStart(2, "0")}`,
+            })
+              .then(renderList)
+              .catch(() => {});
+          // A new progress step: shown in the log and saved.
+          const step = (msg) => {
+            lastMsg = msg;
+            running.set(job.id, msg);
+            log(msg);
+            tick();
+          };
+          AI.setNotifier((msg) => log(msg));
+          const beat = setInterval(tick, 10000);
+          window.onbeforeunload = () =>
+            "The summary is still being made. Leave anyway?";
+          try {
+            const result =
+              source === "link"
+                ? await AI.summarizeLink(link, opts, step)
+                : source === "media"
+                  ? await AI.summarizeMedia(mediaFile, opts, step)
+                  : await AI.summarizeTranscript(text, opts, step);
+            clearInterval(beat);
+            window.onbeforeunload = null;
+            running.delete(job.id);
+            if (source === "link" && result && !result.link) result.link = link;
+            log("Gemini answered. Saving…");
+            try {
+              await API.updateSummary(job.id, {
+                status: "ready",
+                result,
+                step: "",
+              });
+              log("Saved ✓");
+              toast("Summary ready");
+            } catch (saveErr) {
+              log(
+                "Couldn't save to the database: " +
+                  saveErr.message +
+                  " (run the latest schema.sql)",
+                true,
+              );
+              $("#summary").innerHTML =
+                `<p class="small" style="color:var(--warn-ink)">Couldn't save this summary. Here it is anyway:</p><div dir="auto" class="stack" style="gap:18px">${summaryHTML(result)}</div>`;
+              btn.disabled = false;
+              btn.textContent = "Start summary";
+              return;
+            }
+          } catch (err) {
+            clearInterval(beat);
+            window.onbeforeunload = null;
+            running.delete(job.id);
+            log("Error: " + AI.friendly(err), true);
+            console.error(err);
+            await API.updateSummary(job.id, {
+              status: "error",
+              error: AI.friendly(err),
+            }).catch((e) =>
+              log("Also couldn't save the error: " + e.message, true),
+            );
+          }
+          btn.disabled = false;
+          btn.textContent = "Start summary";
+          renderList();
+          renderSummary();
+        });
+
+        // =============================================================================
+        // Marks the summaries this page is still working on as "working", with their latest
+        // step.
+        // =============================================================================
+        const withRunning = (list) =>
+          list.map((s) =>
+            running.has(s.id)
+              ? { ...s, status: "processing", step: running.get(s.id) }
+              : s,
+          );
+
+        // =============================================================================
+        // The list of summaries, newest first.
+        // =============================================================================
+        async function renderList() {
+          const list = withRunning(await API.listSummaries(course.id));
+          setHTML(
+            $("#list"),
+            list.length
+              ? list
+                  .map(
+                    (s) => `
+      <div class="row" style="gap:6px;align-items:stretch">
+        <button type="button" class="rec-item" style="flex:1;min-width:0" data-id="${s.id}" aria-pressed="${s.id === selected}">
+          <div class="row" style="justify-content:space-between"><span style="font-weight:600" dir="auto">${esc(s.label)}</span>
+            ${
+              s.status === "ready"
+                ? `<span class="chip ${s.shared ? "ok" : ""}">${s.shared ? "Shared" : "Ready"}</span>`
+                : s.status === "error"
+                  ? '<span class="chip warn">Failed</span>'
+                  : '<span class="chip accent">Working…</span>'
+            }</div>
+          <span class="small muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.fileName)}, ${fmtDate(s.createdAt)}${s.status === "processing" ? ", " + esc(s.step || "") : ""}</span>
+        </button>
+        <button type="button" class="icon-btn card" style="padding:0;width:44px" data-del-sum="${s.id}" aria-label="Delete summary">${icon("trash", 18, "#68686D")}</button>
+      </div>`,
+                  )
+                  .join("")
+              : '<p class="small muted">No summaries yet.</p>',
+          );
+        }
+
+        // =============================================================================
+        // Opens or deletes a summary from the list.
+        // =============================================================================
+        $("#list").addEventListener("click", async (e) => {
+          const del = e.target.closest("[data-del-sum]");
+          if (del) {
+            if (
+              !(await ask({
+                title: "Delete this summary?",
+                message:
+                  "Students won't see it any more. This can't be undone.",
+                confirm: "Delete summary",
+                danger: true,
+              }))
+            )
+              return;
+            await API.deleteSummary(del.dataset.delSum);
+            if (selected === del.dataset.delSum) {
+              selected = null;
+              $("#summary").innerHTML =
+                '<p class="muted">Pick a summary on the left, or make a new one.</p>';
+            }
+            toast("Summary deleted");
+            return renderList();
+          }
+          const item = e.target.closest("[data-id]");
+          if (item) {
+            selected = item.dataset.id;
+            renderList();
+            renderSummary();
+          }
+        });
+
+        // =============================================================================
+        // Shows the open summary, with buttons to share it with students, print it or delete
+        // it.
+        // =============================================================================
+        async function renderSummary() {
+          const s = withRunning(await API.listSummaries(course.id)).find(
+            (x) => x.id === selected,
+          );
+          if (!s) return;
+          if (s.status === "processing") {
+            setHTML(
+              $("#summary"),
+              `<p class="muted">${esc(s.step || "Working…")}. This can take a few minutes for a long lecture.</p>`,
+            );
+            return;
+          }
+          $("#summary")._html = undefined;
+          if (s.status === "error") {
+            $("#summary").innerHTML =
+              `<p style="font-weight:600;color:var(--warn-ink)">The summary failed</p><p class="muted">${esc(s.error)}</p>
+        <button class="btn" style="align-self:flex-start" id="del">Delete</button>`;
+            $("#del").addEventListener("click", async () => {
+              await API.deleteSummary(s.id);
+              selected = null;
+              renderList();
+              $("#summary").innerHTML = "";
+            });
+            return;
+          }
+          const r = s.result;
+          $("#summary").innerHTML = `
+      <div class="row wrap" style="justify-content:space-between; align-items:flex-start">
+        <div><p class="small muted">${esc(s.label)}, summary in ${esc(s.outLang)}</p><h2 style="font-size:22px;margin-top:4px" dir="auto">${esc(r.title || "")}</h2></div>
+        <div class="row" style="gap:8px">
+          <button class="btn" id="copy">Copy text</button>
+          <button class="btn" id="print">${icon("print", 16)}Print</button>
+          <button class="btn ${s.shared ? "" : "btn-dark"}" id="share">${s.shared ? "Hide from students" : "Share with students"}</button>
+          <button class="icon-btn" aria-label="Delete summary" id="del">${icon("trash", 18, "#68686D")}</button>
+        </div>
+      </div>
+      <div dir="auto" class="stack" style="gap:18px">${summaryHTML(r)}</div>`;
+          $("#share").addEventListener("click", async () => {
+            await API.updateSummary(s.id, { shared: !s.shared });
+            toast(
+              s.shared ? "Hidden from students" : "Students can see it now",
+            );
+            renderList();
+            renderSummary();
+          });
+          $("#del").addEventListener("click", async () => {
+            if (
+              await ask({
+                title: "Delete this summary?",
+                message:
+                  "Students won't see it any more. This can't be undone.",
+                confirm: "Delete summary",
+                danger: true,
+              })
+            ) {
+              await API.deleteSummary(s.id);
+              selected = null;
+              renderList();
+              $("#summary").innerHTML = "";
+            }
+          });
+          $("#print").addEventListener("click", () =>
+            Printer.open({
+              title: r.title || s.label,
+              sub: s.label,
+              when: "end",
+              done: "Sent to your printer",
+              rows: summaryRows(r),
+              note: r.sections
+                ? `${(r.nextSteps || []).reduce((n, g) => n + (g.items || []).length, 0)} next steps`
+                : `${(r.questions || []).length} review questions`,
+              action: () =>
+                Printer.printHTML(
+                  r.title || s.label,
+                  `<h1 dir="auto">${esc(r.title || s.label)}</h1><p class="muted">${esc(course.name)}, ${esc(s.label)}</p><div class="stack" dir="auto">${summaryHTML(r)}</div>`,
+                ),
+            }),
+          );
+          $("#copy").addEventListener("click", () => {
+            navigator.clipboard?.writeText(
+              $("#summary [dir=auto].stack").innerText,
+            );
+            toast("Copied");
+          });
+        }
+
+        renderList();
+
+        // =============================================================================
+        // What students can download from past lectures (kept when a lecture ended). The
+        // lecturer can open or remove each one.
+        // =============================================================================
+        async function renderMaterials() {
+          const list = await API.listMaterials(course.id).catch(() => []);
+          $("#mat-box").classList.toggle("hidden", !list.length);
+          setHTML(
+            $("#mat-list"),
+            list
+              .map(
+                (m) => `
+      <div class="row card" style="gap:8px;padding:10px 12px;align-items:center">
+        <span style="flex:1;min-width:0" dir="auto"><b style="font-weight:600;font-size:14px">${esc(m.title)}</b><br><span class="small muted">${fmtDate(m.createdAt)}</span></span>
+        <button type="button" class="btn" style="min-height:36px" data-mat-open="${esc(m.id)}">Open</button>
+        <button type="button" class="icon-btn" aria-label="Stop sharing and delete" data-mat-del="${esc(m.id)}">${icon("trash", 16, "#68686D")}</button>
+      </div>`,
+              )
+              .join(""),
+          );
+          renderMaterials.list = list;
+        }
+
+        // =============================================================================
+        // Opens or removes a kept material.
+        // =============================================================================
+        $("#mat-list").addEventListener("click", async (e) => {
+          const o = e.target.closest("[data-mat-open]"),
+            d = e.target.closest("[data-mat-del]");
+          const m = (renderMaterials.list || []).find(
+            (x) =>
+              x.id === (o || d)?.dataset.matOpen ||
+              x.id === (o || d)?.dataset.matDel,
+          );
+          if (!m) return;
+          if (o) {
+            const w = window.open("", "_blank");
+            try {
+              const url = await API.materialURL(m.path);
+              if (w) w.location = url;
+            } catch (err) {
+              w?.close();
+              toast(err.message);
+            }
+            return;
+          }
+          if (
+            await ask({
+              title: "Stop sharing this?",
+              message: `"${m.title}" is deleted and students can't download it any more.`,
+              confirm: "Delete",
+              danger: true,
+            })
+          ) {
+            await API.removeMaterial(m);
+            renderMaterials();
+          }
+        });
+        renderMaterials();
+        API.onChange(() => {
+          renderList();
+          renderMaterials();
+          if (selected && running.has(selected)) renderSummary();
+        });
+      })();
+    </script>
+    <span id="page-end" hidden></span>
+  </body>
+</html>
