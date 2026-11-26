@@ -67,3 +67,13 @@ tests/                62 automated tests
 docs/                 project documents
 ```
 
+## Setting it up
+
+1. Create a Supabase project. In the SQL Editor, paste all of `supabase/schema.sql` and run it.
+2. Turn on Google sign-in: create an OAuth client in Google Cloud and paste its ID and secret in Supabase (Authentication → Providers → Google).
+3. Paste the project URL and the publishable key into `js/config.js`.
+4. Publish the repository with GitHub Pages, and put the Pages address in Supabase (Authentication → URL Configuration).
+5. For Zoom and Drive summaries, deploy `supabase/functions/fetch-recording` as an Edge Function named `fetch-recording` and turn off Verify JWT (the function checks the sign-in itself).
+
+The secret key, the service_role key, the database password and the Google client secret never go into this repository. Neither does the real student list.
+
