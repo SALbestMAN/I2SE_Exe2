@@ -1,0 +1,320 @@
+<!doctype html>
+<!-- =============================================================================
+     The check-in screen. The student points the phone at the projector; the phone
+     records about 2 seconds of the animated code and sends it, and the server checks
+     everything (on the list, genuine frames, live code, real-time speed, Wi-Fi,
+     distance). Each check is shown with a tick or a cross. Adding ?tests=1 to the
+     address shows the cheating tests used in the class demo.
+     ============================================================================= -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <meta name="theme-color" content="#F3F0E8">
+  <meta name="darkreader-lock">
+  <title>Check in</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Heebo:wght@400;500;600;700;800;900&family=Frank+Ruhl+Libre:wght@400;500;700&display=swap">
+  <link rel="stylesheet" href="../css/style.css?v=7.0">
+  <script src="../js/i18n-strings.js?v=7.0"></script>
+  <script src="../js/i18n.js?v=7.0"></script>
+  <link rel="expect" href="#page-end" blocking="render">
+</head>
+<body class="dark-screen">
+<script>
+// =============================================================================
+// Runs before anything is drawn. When the person arrives from (or goes into) the live
+// room, the curtain sheet is still covering the screen, so it is put back right away
+// and the page never flashes in between. See js/curtain.js.
+// =============================================================================
+try{var cpO=JSON.parse(sessionStorage.getItem("cp.curtain")||"null"),cpN=(performance.getEntriesByType("navigation")[0]||{}).type,cpD=document.body.classList.contains("dark-screen");sessionStorage.removeItem("cp.curtain");if(!cpO&&cpN==="back_forward"&&(cpD!==(sessionStorage.getItem("cp.fromDark")==="1")))cpO={dir:"back",color:"blue"};if(cpO){var cpC=document.createElement("div");cpC.className="curtain "+(cpO.color==="ink"?"ink":"blue")+(cpO.dir==="back"?" edge-left":" edge-right");cpC.setAttribute("aria-hidden","true");cpC.dataset.dir=cpO.dir;cpC.dataset.mode="slide";document.body.prepend(cpC)}}catch(e){}</script>
+<div class="phone" style="max-width:480px;margin:0 auto">
+  <main class="phone-main" style="padding:max(20px, env(safe-area-inset-top)) 20px 28px;gap:18px">
+    <div class="row" style="justify-content:space-between">
+      <a class="icon-btn" href="home.html" aria-label="Cancel" style="border:1px solid var(--dark-line-2)" id="cancel"></a>
+      <span class="mono" style="font-size:11px;flex:1;min-width:0;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 10px" id="course-name"></span>
+      <span class="mono" style="font-size:11px;color:var(--hl);min-width:44px;text-align:end;white-space:nowrap" id="live-tag"></span>
+    </div>
+
+    <div class="viewfinder" id="viewfinder">
+      <video id="video" muted playsinline aria-label="Camera"></video>
+      <canvas id="code" class="hidden" aria-label="Frames from the projector window (test without camera)" role="img"></canvas>
+      <p class="small" id="cam-msg" style="position:absolute;inset:auto 24px;text-align:center;color:var(--on-dark-2);z-index:3">Starting the camera…</p>
+      <span class="vf-hint">Point at the projector</span>
+    </div>
+
+    <div class="row" style="justify-content:space-between; align-items:flex-end">
+      <h1 id="scan-title" style="font-size:46px;font-weight:900;letter-spacing:-0.05em;line-height:.9">Getting <span class="serif" style="display:block;font-size:52px;line-height:.95">ready…</span></h1>
+      <div style="text-align:end"><div dir="ltr" style="font-size:40px;font-weight:900;letter-spacing:-0.05em;line-height:1" id="frames-num">0<span style="color:var(--dark-muted);font-weight:400">/10</span></div>
+        <div class="mono" style="font-size:10px;color:var(--on-dark-2);margin-top:4px">Frames</div></div>
+    </div>
+    <div class="segments" id="segments" role="progressbar" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0" aria-label="Frames captured"></div>
+    <p class="small" style="color:var(--on-dark-2)" id="scan-hint">Point the camera at the code on the projector and hold still for 2 seconds.</p>
+
+    <ul class="check-list" id="checks"></ul>
+
+    <div class="row hidden" style="gap:8px" id="actions">
+      <a class="btn btn-primary btn-lg" style="flex:1;border-radius:999px" id="continue-btn">Continue</a>
+      <button type="button" class="btn btn-lg btn-ghost hidden" style="flex:1" id="retry-btn">Try again</button>
+    </div>
+    <button type="button" class="link-btn hidden" id="ask-btn">Still can't check in? Ask the lecturer</button>
+
+    <details style="color:var(--dark-muted)" id="tests">
+      <summary class="small" style="cursor:pointer;min-height:32px">Tests: try to cheat (nothing is saved)</summary>
+      <div class="stack" style="gap:8px; margin-top:8px">
+        <button type="button" class="btn btn-ghost" data-test="replay">Replay a recording 5 s later</button>
+        <button type="button" class="btn btn-ghost" data-test="speed">Play the recording at 2× speed</button>
+        <button type="button" class="btn btn-ghost" data-test="forge">Change one frame's time</button>
+        <button type="button" class="btn btn-ghost" data-test="photo">Send one photo (single frame)</button>
+      </div>
+    </details>
+  </main>
+</div>
+
+<script src="../js/config.js?v=7.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/api-supabase.js?v=7.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="../js/frames.js?v=7.0"></script>
+<script src="../js/ui.js?v=7.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+<script src="../js/curtain.js?v=7.0"></script>
+<script src="../js/motion.js?v=7.0"></script>
+<script>
+// =============================================================================
+// The check-in screen's code.
+// =============================================================================
+(async () => {
+  const me = requireRole("student");
+  const course = await getCourse();
+  if (!course) { location.replace("home.html"); return; }
+
+  // =============================================================================
+  // How many frames fill the progress bar. The server needs at least 6.
+  // =============================================================================
+  const NEED = 10;
+  let busy = false, onRaw = null;
+
+  $("#cancel").innerHTML = icon("close", 16, "currentColor", 2.2);
+  if (!param("tests")) $("#tests").remove();
+  setText($("#course-name"), course.name);
+
+  // =============================================================================
+  // Sets the big title in two styles: a bold word and its serif voice.
+  // =============================================================================
+  const title = (a, b = "") => { $("#scan-title").innerHTML = `${esc(a)}${b ? `<span class="serif" style="display:block;font-size:52px;line-height:.95;font-weight:400">${esc(b)}</span>` : ""}`; };
+
+  // =============================================================================
+  // Each status message as a two-part title.
+  // =============================================================================
+  const TITLE = { "Getting ready…": ["Getting", "ready…"], "No live session": ["No live", "session."], "Already checked in ✓": ["Checked", "in already."],
+    "Second check done ✓": ["Second check", "done."], "Checking location…": ["Checking", "location…"], "Can't check in": ["Can't", "check in."],
+    "Recording the code…": ["Recording", "the code…"], "Second check: hold steady": ["Second check:", "hold steady."], "Hold steady": ["Hold", "steady."],
+    "Can't see the code": ["Can't see", "the code."], "Checking…": ["Checking", "…"], "No internet": ["No", "internet."], "You're in! ✓": ["You're", "in."],
+    "Replaying in 5 s…": ["Replaying", "in 5 s…"], "Test passed: that's a problem!": ["Test passed", "a problem."], "Blocked ✓": ["Blocked", "as it should."],
+    "Check-in failed": ["Check-in", "failed."], "Request sent": ["Request", "sent."] };
+  const scanTitle = { set textContent(v) { const t = TITLE[v] || [v]; title(t[0], t[1]); } };
+  $("#viewfinder").insertAdjacentHTML("beforeend", VIEWFINDER_CORNERS);
+  $("#segments").innerHTML = "<span></span>".repeat(NEED);
+
+  FRAMES.startCamera($("#video"), (raw) => onRaw?.(raw, "camera"))
+    .then((stop) => { $("#cam-msg").classList.add("hidden"); window.addEventListener("pagehide", stop); })
+    .catch((e) => { setText($("#cam-msg"), (e.name === "NotAllowedError" ? "Camera blocked. Allow it in the browser settings." : e.message) + " (Same computer? The projector window works too.)"); });
+
+  // =============================================================================
+  // On a computer without a camera, frames can come from the projector window in the
+  // same browser (for trying it out).
+  // =============================================================================
+  FRAMES.listen((raw) => {
+    $("#code").classList.remove("hidden"); $("#cam-msg").classList.add("hidden");
+    FRAMES.draw($("#code"), raw, "#FFFFFF");
+    if (Math.random() < 0.75) onRaw?.(raw, "window");
+  });
+
+  // =============================================================================
+  // Fills the progress bar up to k frames.
+  // =============================================================================
+  function setProgress(k) {
+    $all("#segments span").forEach((s, i) => s.classList.toggle("done", i < k));
+    $("#segments").setAttribute("aria-valuenow", k);
+    $("#frames-num").innerHTML = `${Math.min(k, NEED)}<span style="color:var(--dark-muted);font-weight:400">/${NEED}</span>`;
+  }
+
+  // =============================================================================
+  // Collects frames of this lecture until there are enough over at least 1.2 seconds.
+  // Returns the frames in order and the time it took on this phone. Gives up after 15
+  // seconds.
+  // =============================================================================
+  function capture(short) {
+    return new Promise((resolve, reject) => {
+      const got = new Map();
+      setProgress(0);
+      const timeout = setTimeout(() => { onRaw = null; reject(new Error("no-signal")); }, 15000);
+      onRaw = (raw) => {
+        const f = API.parseFrame(raw);
+        if (!f || f.sessionId !== short || got.has(f.n)) return;
+        got.set(f.n, { raw, n: f.n, at: performance.now() });
+        setProgress(got.size);
+        const list = [...got.values()].sort((a, b) => a.n - b.n);
+        if (list.length >= NEED && list[list.length - 1].at - list[0].at >= 1200) {
+          clearTimeout(timeout); onRaw = null;
+          resolve({ frames: list.map((x) => x.raw), elapsed: list[list.length - 1].at - list[0].at });
+        }
+      };
+    });
+  }
+
+  // =============================================================================
+  // Shows every check with its result: done, check (a warning), or failed.
+  // =============================================================================
+  function showChecks(checks) {
+    const ST = { ok: '<span class="st ok">✓ Done</span>', warn: '<span class="st warn">! Check</span>', fail: '<span class="st fail">✕ Failed</span>' };
+    $("#checks").innerHTML = checks.map((c) => `
+      <li><span><span>${esc(c.label)}</span>${c.detail ? `<span class="d">${esc(c.detail)}</span>` : ""}</span>${ST[c.level] || ""}</li>`).join("");
+  }
+
+  // =============================================================================
+  // The list of checks while waiting for the server.
+  // =============================================================================
+  const pendingChecks = () => $("#checks").innerHTML = ["On the course list", "Class Wi-Fi", "Near the class", "Code is live"]
+    .map((t, i) => `<li><span ${i ? 'style="color:var(--on-dark-2)"' : ""}>${t}</span>${i ? '<span class="st">Waiting</span>' : '<span class="st run">Checking…</span>'}</li>`).join("");
+
+  // =============================================================================
+  // Shows the Continue button after a successful check-in.
+  // =============================================================================
+  function showContinue() {
+    $("#actions").classList.remove("hidden"); $("#continue-btn").classList.remove("hidden");
+    $("#continue-btn").href = `course.html?course=${course.code}&checked=1`;
+    $("#retry-btn").classList.add("hidden");
+  }
+
+  // =============================================================================
+  // The live lecture, for "Ask the lecturer".
+  // =============================================================================
+  let current = null;
+
+  // =============================================================================
+  // Shows Try again (and "Ask the lecturer" when it makes sense).
+  // =============================================================================
+  function showRetry(label = "Try again", canAsk = true) {
+    $("#actions").classList.remove("hidden"); $("#continue-btn").classList.add("hidden");
+    $("#retry-btn").classList.remove("hidden"); setText($("#retry-btn"), label);
+    $("#ask-btn").classList.toggle("hidden", !(canAsk && current));
+  }
+
+  // =============================================================================
+  // Starts a check-in (never two at once).
+  // =============================================================================
+  async function run({ test } = {}) {
+    if (busy) return; busy = true;
+    try { await doRun(test); } finally { busy = false; }
+  }
+
+  // =============================================================================
+  // The check-in from start to end: finds the live lecture, starts the camera, tells the
+  // server the scan began, measures the connection, records the frames, gets the
+  // location if needed, sends everything and shows the result. The cheating tests
+  // (?tests=1) replay, speed up or change the recorded frames to show that the server
+  // blocks them.
+  // =============================================================================
+  async function doRun(test) {
+    $("#actions").classList.add("hidden"); $("#ask-btn").classList.add("hidden");
+    const session = current = await API.activeSession(course.id);
+    if (!session) {
+      scanTitle.textContent = "No live session";
+      setText($("#scan-hint"), "The lecturer hasn't started check-in for this course yet.");
+      $("#checks").innerHTML = "";
+      return showRetry();
+    }
+    const round = API.recheckState(session).active ? 2 : 1;
+    setText($("#course-name"), `${course.name} · L${pad2(session.number)}`); setText($("#live-tag"), "● Live");
+    const rec = await API.myRecord(session.id, me.email);
+    if (!test && rec[round === 2 ? "check2" : "check1"]) {
+      scanTitle.textContent = round === 2 ? "Second check done ✓" : "Already checked in ✓";
+      setText($("#scan-hint"), round === 2 ? "You passed the second check." : "Keep the app open. A second check may come during class.");
+      return showContinue();
+    }
+
+    scanTitle.textContent = "Checking location…";
+    pendingChecks();
+    const ctx = await getCheckContext();
+
+    const begin = await API.beginScan(session.id, me.email);
+    if (!begin.ok) { scanTitle.textContent = "Can't check in"; setText($("#scan-hint"), begin.error); $("#checks").innerHTML = ""; return showRetry(); }
+
+    scanTitle.textContent = test ? "Recording the code…" : round === 2 ? "Second check: hold steady" : "Hold steady";
+    setText($("#scan-hint"), "Point the camera at the code on the projector and hold still for 2 seconds.");
+
+    let shot;
+    try { shot = await capture(session.short || session.id); }
+    catch (e) {
+      scanTitle.textContent = "Can't see the code";
+      setText($("#scan-hint"), "Get closer to the projector, or make the code bigger on the screen.");
+      $("#checks").innerHTML = "";
+      return showRetry();
+    }
+    let { frames, elapsed } = shot, res;
+    if (!test) {
+      scanTitle.textContent = "Checking…";
+      try { res = await API.submitScan(session.id, me.email, frames, elapsed, ctx); }
+      catch (e) {
+        scanTitle.textContent = "No internet";
+        setText($("#scan-hint"), "Your phone couldn't reach the server. Check the Wi-Fi and try again.");
+        $("#checks").innerHTML = "";
+        return showRetry();
+      }
+    } else if (test === "replay") {
+      scanTitle.textContent = "Replaying in 5 s…";
+      await new Promise((r) => setTimeout(r, 5000));
+      await API.beginScan(session.id, me.email);
+      res = await API.submitScan(session.id, me.email, frames, elapsed, ctx, { dryRun: true });
+    } else if (test === "speed") {
+      res = await API.submitScan(session.id, me.email, frames, elapsed / 2, ctx, { dryRun: true });
+    } else if (test === "forge") {
+      const p = frames[3].split("|"); p[4] = String(Number(p[4]) + 5000); frames[3] = p.join("|");
+      res = await API.submitScan(session.id, me.email, frames, elapsed, ctx, { dryRun: true });
+    } else if (test === "photo") {
+      res = await API.submitScan(session.id, me.email, [frames[frames.length - 1]], 0, ctx, { dryRun: true });
+    }
+
+    showChecks(res.checks);
+    if (test) {
+      scanTitle.textContent = res.ok ? "Test passed: that's a problem!" : "Blocked ✓";
+      setText($("#scan-hint"), res.ok ? "This attempt should have been blocked." : "The check-in caught it. Nothing was saved.");
+      return showRetry("Back to check-in", false);
+    }
+    if (res.already || res.ok) {
+      navigator.vibrate?.(150);
+      scanTitle.textContent = res.round === 2 ? "Second check done ✓" : "You're in! ✓";
+      setText($("#scan-hint"), res.round === 2 ? "Thanks, you're marked present." : "Keep the app open. A second check may come during class.");
+      return showContinue();
+    }
+    scanTitle.textContent = "Check-in failed";
+    setText($("#scan-hint"), "Fix what's marked below and try again.");
+    showRetry();
+  }
+
+  $("#retry-btn").addEventListener("click", () => run());
+
+  // =============================================================================
+  // "Ask the lecturer": sends a request to be marked present.
+  // =============================================================================
+  $("#ask-btn").addEventListener("click", async () => {
+    if (current && await askLecturerForAttendance(current)) {
+      scanTitle.textContent = "Request sent";
+      setText($("#scan-hint"), "Your lecturer will decide. You'll see the answer in the course's Attendance tab.");
+      $("#checks").innerHTML = ""; $("#ask-btn").classList.add("hidden");
+      showContinue(); $("#continue-btn").href = `course.html?course=${course.code}&tab=attendance`;
+    }
+  });
+  $all("[data-test]").forEach((b) => b.addEventListener("click", () => { $("#tests").open = false; run({ test: b.dataset.test }); }));
+  run();
+})();
+</script>
+<span id="page-end" hidden></span>
+</body>
+</html>
