@@ -89,3 +89,17 @@ There are 62 tests in three groups. On the last run (26 Nov 2026) all of them pa
 
 `tests/db/run.sh` deletes and recreates a database called `cp_test` each time, so run it only on a local test database. The output of the last run is in `tests/results/`. All test data uses invented names and emails.
 
+## Documents
+
+Read them in this order. Each one builds on the one before it.
+
+- [Technical tools report](docs/technical-tools-report.md): the tools we picked and what happened when we tried each one.
+- [Scope of work](docs/scope-of-work.md): the full version of the scope above, with the plan.
+- [Software requirements](docs/software-requirements.md): what the system must do, each requirement with an ID.
+- [Use cases and user stories](docs/use-cases-and-user-stories.md): how lecturers and students use it, step by step.
+- [Software design](docs/software-design.md): the main parts of the system and how they talk to each other.
+- [Class diagram](docs/class-diagram.md): the data and the code modules.
+- [Sequence diagrams](docs/sequence-diagrams.md): check-in, an AI summary, and a poll vote, message by message.
+- [Testing strategy](docs/testing-strategy.md): how we test, all 62 tests, and the results.
+
+The IDs connect the documents. A requirement (REQ-06) leads to a use case (UC-01), a part of the design, and the tests that prove it works (TC-01 to TC-16). The table at the end of the requirements document shows this for every requirement. Diagrams are written in Mermaid, so GitHub draws them right on the page.
