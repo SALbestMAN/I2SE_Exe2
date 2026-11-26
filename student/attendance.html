@@ -1,0 +1,228 @@
+<!doctype html>
+<!-- =============================================================================
+     The student's attendance across all their courses: a total, and each course's
+     lectures with the mark and why. A missed check-in has a button to ask the lecturer.
+     ============================================================================= -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <meta name="theme-color" content="#F3F0E8" />
+    <meta name="darkreader-lock" />
+    <title>Attendance</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Heebo:wght@400;500;600;700;800;900&family=Frank+Ruhl+Libre:wght@400;500;700&display=swap"
+    />
+    <link rel="stylesheet" href="../css/style.css?v=7.0" />
+    <script src="../js/i18n-strings.js?v=7.0"></script>
+    <script src="../js/i18n.js?v=7.0"></script>
+    <link rel="expect" href="#page-end" blocking="render" />
+  </head>
+  <body>
+    <script>
+      // =============================================================================
+      // Runs before anything is drawn. When the person arrives from (or goes into) the live
+      // room, the curtain sheet is still covering the screen, so it is put back right away
+      // and the page never flashes in between. See js/curtain.js.
+      // =============================================================================
+      try {
+        var cpO = JSON.parse(sessionStorage.getItem("cp.curtain") || "null"),
+          cpN = (performance.getEntriesByType("navigation")[0] || {}).type,
+          cpD = document.body.classList.contains("dark-screen");
+        sessionStorage.removeItem("cp.curtain");
+        if (
+          !cpO &&
+          cpN === "back_forward" &&
+          cpD !== (sessionStorage.getItem("cp.fromDark") === "1")
+        )
+          cpO = { dir: "back", color: "blue" };
+        if (cpO) {
+          var cpC = document.createElement("div");
+          cpC.className =
+            "curtain " +
+            (cpO.color === "ink" ? "ink" : "blue") +
+            (cpO.dir === "back" ? " edge-left" : " edge-right");
+          cpC.setAttribute("aria-hidden", "true");
+          cpC.dataset.dir = cpO.dir;
+          cpC.dataset.mode = "slide";
+          document.body.prepend(cpC);
+        }
+      } catch (e) {}
+    </script>
+    <div class="phone">
+      <main class="phone-main">
+        <header class="page-head">
+          <div>
+            <span class="kicker" id="kicker">&nbsp;</span>
+            <h1 class="page-title">
+              Your <span class="serif"><span class="hl">record.</span></span>
+            </h1>
+          </div>
+          <div class="head-stats">
+            <div>
+              <div class="label">Overall</div>
+              <div class="v" id="overall">&ndash;</div>
+            </div>
+          </div>
+        </header>
+        <div class="stack" style="gap: 40px" id="courses"></div>
+      </main>
+    </div>
+    <script src="../js/config.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/api-supabase.js?v=7.0"></script>
+    <script src="../js/ui.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+    <script src="../js/curtain.js?v=7.0"></script>
+    <script src="../js/motion.js?v=7.0"></script>
+    <script>
+      // =============================================================================
+      // The student attendance page's code.
+      // =============================================================================
+      (async () => {
+        const me = renderStudentNav("attendance");
+        setText($("#kicker"), `${semester()} · only you can see this page`);
+
+        // =============================================================================
+        // The symbol and the word for each mark: ✓ present, ½ partial, – absent.
+        // =============================================================================
+        const SYM = { P: "✓", H: "½", A: "–" },
+          LABEL = { P: "Present", H: "Partial", A: "Absent" };
+        let all = [];
+
+        // =============================================================================
+        // The reason shown next to a mark.
+        // =============================================================================
+        const why = (r) =>
+          r.status === "P" && r.request === "approved"
+            ? "approved by the lecturer"
+            : r.status === "P"
+              ? r.secondCheckHappened
+                ? "both checks"
+                : "checked in"
+              : r.status === "H"
+                ? r.check1
+                  ? "missed the second check"
+                  : "missed the first check"
+                : "no check-in";
+
+        // =============================================================================
+        // The request button, or the state of a request already sent.
+        // =============================================================================
+        const reqUI = (r) =>
+          r.request === "pending"
+            ? '<span class="chip">Request sent</span>'
+            : r.request === "declined"
+              ? '<span class="chip danger">Declined</span>'
+              : r.status === "P"
+                ? ""
+                : `<button type="button" class="btn" style="min-height:40px" data-ask="${r.id}">Ask lecturer</button>`;
+
+        // =============================================================================
+        // Draws the total and every course's lectures.
+        // =============================================================================
+        function draw(list) {
+          all = list;
+          const rows = list.flatMap((x) => x.rows);
+          // An attendance percent: present counts 1, partial counts half.
+          const score = (rs) =>
+            rs.length
+              ? Math.round(
+                  (rs.reduce(
+                    (n, r) =>
+                      n + (r.status === "P" ? 1 : r.status === "H" ? 0.5 : 0),
+                    0,
+                  ) /
+                    rs.length) *
+                    100,
+                )
+              : null;
+          const o = score(rows);
+          setText($("#overall"), o == null ? "–" : o + "%");
+          setHTML(
+            $("#courses"),
+            list.length
+              ? list
+                  .map(({ c, rows }, i) => {
+                    const p = score(rows),
+                      n = { P: 0, H: 0, A: 0 };
+                    rows.forEach((r) => n[r.status]++);
+                    return `<section aria-label="${esc(c.name)}">
+        <div class="row wrap" style="justify-content:space-between;align-items:flex-end;border-bottom:2px solid var(--ink);padding-bottom:12px;gap:12px">
+          <a href="course.html?course=${c.code}&tab=attendance" style="text-decoration:none;display:flex;gap:14px;align-items:center">
+            <span class="sw" style="width:10px;height:36px;border-radius:2px;background:${coverOf({ ...c, cover: i }).cover}"></span>
+            <h2 style="font-size:clamp(30px,3.4vw,44px);font-weight:900;letter-spacing:-0.045em" dir="auto">${titleHTML(c.name)}</h2></a>
+          <div class="row" style="gap:18px;align-items:baseline"><span class="mono muted" style="font-size:10px">${n.P} present · ${n.H} partial · ${n.A} absent</span>
+            <span class="big-pct" style="font-size:44px">${p == null ? "–" : p}<span class="serif" style="font-size:30px">${p == null ? "" : "%"}</span></span></div>
+        </div>
+        ${
+          rows.length
+            ? `<div>${rows
+                .slice()
+                .reverse()
+                .map(
+                  (r) => `
+          <div class="session-row">
+            <div class="session-date"><b>${pad2(new Date(r.startedAt).getDate())}</b><span>${new Date(r.startedAt).toLocaleDateString("en-GB", { month: "short" })} · L${pad2(r.number)}</span></div>
+            <div style="flex:1 1 180px;min-width:0"><p class="s-title" dir="auto">${esc(r.title || "Lecture " + r.number)}</p><p class="serif muted" style="font-size:17px">${why(r)}${r.check1At ? `, ${fmtTime(r.check1At).slice(0, 5)}` : ""}</p></div>
+            ${reqUI(r)}
+            <span class="cell ${r.status}" role="img" aria-label="${LABEL[r.status]}">${SYM[r.status]}</span>
+          </div>`,
+                )
+                .join("")}</div>`
+            : `<p class="serif muted" style="font-size:22px;padding:18px 0">No lectures yet.</p>`
+        }
+      </section>`;
+                  })
+                  .join("")
+              : `<p class="serif muted" style="font-size:26px">No courses yet. <a href="home.html#my-shelf">Join one from your shelf</a>.</p>`,
+          );
+        }
+
+        // =============================================================================
+        // Sends a request to be marked present.
+        // =============================================================================
+        $("#courses").addEventListener("click", async (e) => {
+          const b = e.target.closest("[data-ask]");
+          if (!b) return;
+          const r = all
+            .flatMap((x) => x.rows)
+            .find((x) => String(x.id) === b.dataset.ask);
+          if (r && (await askLecturerForAttendance(r))) render();
+        });
+
+        // =============================================================================
+        // Loads the student's attendance in every course and draws it.
+        // =============================================================================
+        async function render() {
+          const mine = await API.myCourses(me.email);
+          const list = await Promise.all(
+            mine.map(async (c) => ({
+              c,
+              rows: (await API.myAttendance(c.id, me.email)) || [],
+            })),
+          );
+          cacheSet("stu-att", list);
+          draw(list);
+        }
+
+        // =============================================================================
+        // Shows what this tab saw last time, then loads fresh data.
+        // =============================================================================
+        const cached = cacheGet("stu-att");
+        if (cached) {
+          draw(cached);
+          bootDone();
+        }
+        render();
+        API.onChange(render);
+      })();
+    </script>
+    <span id="page-end" hidden></span>
+  </body>
+</html>
