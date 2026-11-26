@@ -1,0 +1,745 @@
+<!doctype html>
+<!-- =============================================================================
+     One course on the lecturer's side: its lectures (planned, live and past), a form to
+     plan a new lecture with its checks, editing the course, other lecturers who run it,
+     and deleting it.
+     ============================================================================= -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <meta name="theme-color" content="#F3F0E8" />
+    <meta name="darkreader-lock" />
+    <title>Course</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Heebo:wght@400;500;600;700;800;900&family=Frank+Ruhl+Libre:wght@400;500;700&display=swap"
+    />
+    <link rel="stylesheet" href="../css/style.css?v=7.0" />
+    <script src="../js/i18n-strings.js?v=7.0"></script>
+    <script src="../js/i18n.js?v=7.0"></script>
+    <link rel="expect" href="#page-end" blocking="render" />
+  </head>
+  <body>
+    <script>
+      // =============================================================================
+      // Runs before anything is drawn. When the person arrives from (or goes into) the live
+      // room, the curtain sheet is still covering the screen, so it is put back right away
+      // and the page never flashes in between. See js/curtain.js.
+      // =============================================================================
+      try {
+        var cpO = JSON.parse(sessionStorage.getItem("cp.curtain") || "null"),
+          cpN = (performance.getEntriesByType("navigation")[0] || {}).type,
+          cpD = document.body.classList.contains("dark-screen");
+        sessionStorage.removeItem("cp.curtain");
+        if (
+          !cpO &&
+          cpN === "back_forward" &&
+          cpD !== (sessionStorage.getItem("cp.fromDark") === "1")
+        )
+          cpO = { dir: "back", color: "blue" };
+        if (cpO) {
+          var cpC = document.createElement("div");
+          cpC.className =
+            "curtain " +
+            (cpO.color === "ink" ? "ink" : "blue") +
+            (cpO.dir === "back" ? " edge-left" : " edge-right");
+          cpC.setAttribute("aria-hidden", "true");
+          cpC.dataset.dir = cpO.dir;
+          cpC.dataset.mode = "slide";
+          document.body.prepend(cpC);
+        }
+      } catch (e) {}
+    </script>
+    <div id="topbar"></div>
+    <main class="container">
+      <div id="course-head" data-tab="sessions"></div>
+
+      <div class="split">
+        <section class="main" aria-labelledby="ses-h">
+          <div
+            class="row"
+            style="
+              justify-content: space-between;
+              align-items: baseline;
+              flex-wrap: wrap;
+            "
+          >
+            <h2 id="ses-h" class="section-title" style="font-size: 36px">
+              Sessions <span class="serif">so far</span>
+            </h2>
+            <span class="row" style="gap: 12px"
+              ><span class="mono muted" id="session-count"></span>
+              <button
+                type="button"
+                class="btn"
+                style="min-height: 40px"
+                id="edit-course"
+              >
+                Edit course
+              </button></span
+            >
+          </div>
+          <div class="ruled" style="margin-top: 14px" id="sessions"></div>
+        </section>
+
+        <form
+          class="side-col card strong stack"
+          style="border-radius: 26px; padding: 22px; gap: 14px"
+          id="new-session"
+          aria-labelledby="new-h"
+        >
+          <h2
+            id="new-h"
+            class="sx-title"
+            style="font-size: 30px; font-weight: 900; letter-spacing: -0.045em"
+          >
+            Plan a <span class="serif"><span class="hl">session</span></span>
+          </h2>
+          <label class="field"
+            >Title<input id="s-title" placeholder="e.g. Week 5: UML" dir="auto"
+          /></label>
+          <div class="grid-2">
+            <label class="field"
+              >Date<input id="s-date" type="date" required
+            /></label>
+            <label class="field"
+              >Time<input id="s-time" type="time" required
+            /></label>
+          </div>
+          <div class="seg" role="group" aria-label="Where">
+            <button type="button" data-mode="class" aria-pressed="true">
+              In class
+            </button>
+            <button type="button" data-mode="online" aria-pressed="false">
+              Online
+            </button>
+          </div>
+          <fieldset style="border: 0; margin: 0; padding: 0">
+            <legend
+              class="label"
+              style="padding: 0; margin-bottom: 4px; font-size: 10px"
+            >
+              Check-in rules
+            </legend>
+            <label class="switch"
+              ><span
+                ><b>Class Wi-Fi</b><br /><span class="hint"
+                  >same network as your laptop</span
+                ></span
+              ><input type="checkbox" role="switch" id="s-wifi" checked
+            /></label>
+            <label class="switch"
+              ><span
+                ><b>Location</b><br /><span class="hint"
+                  >within 300 m of you</span
+                ></span
+              ><input type="checkbox" role="switch" id="s-loc" checked
+            /></label>
+            <label class="switch"
+              ><span
+                ><b>Second check</b><br /><span class="hint"
+                  >everyone scans again later</span
+                ></span
+              ><input type="checkbox" role="switch" id="s-second" checked
+            /></label>
+          </fieldset>
+          <div class="stack" style="gap: 10px" id="recheck-box">
+            <div class="grid-2">
+              <label class="field"
+                >2nd check
+                <select id="r-mode">
+                  <option value="manual">My button</option>
+                  <option value="after">After N minutes</option>
+                  <option value="at">At a clock time</option>
+                </select></label
+              >
+              <label class="field"
+                >Window
+                <select id="r-window">
+                  <option value="30">30 seconds</option>
+                  <option value="60" selected>1 minute</option>
+                  <option value="90">90 seconds</option>
+                  <option value="120">2 minutes</option>
+                  <option value="300">5 minutes</option>
+                </select></label
+              >
+            </div>
+            <label class="field hidden" id="r-after-f"
+              >Minutes after attendance opens<input
+                type="number"
+                id="r-after"
+                min="1"
+                max="300"
+                value="30"
+            /></label>
+            <label class="field hidden" id="r-at-f"
+              >At<input type="time" id="r-at"
+            /></label>
+          </div>
+          <p class="small muted hidden" id="online-note">
+            Online: students are at home, so Wi-Fi and location aren't checked.
+            Share your screen with the code in Zoom or Meet.
+          </p>
+          <button class="btn btn-dark btn-lg" style="min-height: 56px">
+            Add to schedule
+          </button>
+        </form>
+      </div>
+
+      <!-- =============================================================================
+       Other lecturers who run this course.
+       ============================================================================= -->
+      <section
+        class="stack"
+        style="
+          gap: 12px;
+          margin-top: 28px;
+          padding-top: 18px;
+          border-top: 1px solid var(--line);
+        "
+        aria-labelledby="lec-h"
+      >
+        <div
+          class="row wrap"
+          style="justify-content: space-between; align-items: baseline"
+        >
+          <h2
+            id="lec-h"
+            style="font-size: 24px; font-weight: 900; letter-spacing: -0.04em"
+          >
+            Lecturers
+          </h2>
+          <span class="small muted" id="lec-note"></span>
+        </div>
+        <div class="stack" style="gap: 8px" id="lec-list"></div>
+        <form class="row wrap hidden" style="gap: 8px" id="lec-add">
+          <label class="sr-only" for="lec-email">Lecturer's Google email</label>
+          <input
+            class="input"
+            style="flex: 1 1 260px"
+            id="lec-email"
+            type="email"
+            placeholder="Another lecturer's Google email"
+            autocomplete="off"
+            required
+          />
+          <button class="btn btn-dark" style="min-height: 50px">
+            Add lecturer
+          </button>
+        </form>
+      </section>
+
+      <div
+        class="row wrap hidden"
+        style="
+          justify-content: space-between;
+          margin-top: 20px;
+          padding-top: 18px;
+          border-top: 1px solid var(--line);
+        "
+        id="delete-row"
+      >
+        <span class="small" style="color: var(--ink-2)"
+          >Deleting a course removes its sessions, attendance and
+          summaries.</span
+        >
+        <button class="btn btn-danger" id="delete-course">Delete course</button>
+      </div>
+    </main>
+
+    <script src="../js/config.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/api-supabase.js?v=7.0"></script>
+    <script src="../js/ui.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+    <script src="../js/curtain.js?v=7.0"></script>
+    <script src="../js/motion.js?v=7.0"></script>
+    <script>
+      // =============================================================================
+      // The course page's code.
+      // =============================================================================
+      (async () => {
+        renderTopbar();
+        const course = await getCourse();
+        if (!course) {
+          location.replace("courses.html");
+          return;
+        }
+        setText($("#delete-course"), "Delete course");
+
+        // =============================================================================
+        // Deletes the course. The lecturer must type its join code to confirm, because
+        // everything in it goes too.
+        // =============================================================================
+        $("#delete-course").addEventListener("click", async () => {
+          const typed = await ask({
+            title: `Delete ${course.name}?`,
+            danger: true,
+            confirm: "Delete course",
+            message:
+              "This deletes the course with all its students, sessions, attendance, polls, summaries and homework. It can't be undone.",
+            input: {
+              label: `Type the join code ${course.code} to confirm`,
+              placeholder: course.code,
+              match: course.code,
+            },
+          });
+          if (typed === null) return;
+          await API.deleteCourse(course.id);
+          try {
+            sessionStorage.removeItem("cp.lect-courses");
+          } catch (e) {}
+          toast("Course deleted");
+          location.replace("courses.html");
+        });
+
+        // =============================================================================
+        // Other lecturers: the owner can add another lecturer, who can do everything except
+        // add or remove lecturers and delete the course.
+        // =============================================================================
+        const owner = course.isOwner !== false;
+        $("#delete-row").classList.toggle("hidden", !owner);
+        $("#lec-add").classList.toggle("hidden", !owner);
+        setText(
+          $("#lec-note"),
+          owner
+            ? "They can run lectures, see attendance and grade homework. You can remove them any time."
+            : "Added by the course's owner.",
+        );
+
+        // =============================================================================
+        // The list of lecturers who run this course, with Remove buttons for the owner.
+        // =============================================================================
+        async function renderLecturers() {
+          let list = [];
+          try {
+            list = await API.listAdmins(course.id);
+          } catch (e) {
+            setHTML(
+              $("#lec-list"),
+              `<p class="small muted">Run the latest schema.sql in Supabase to add lecturers.</p>`,
+            );
+            return;
+          }
+          const me = (API.getSession()?.email || "").toLowerCase();
+          // One lecturer in the list.
+          const rowOf = (
+            email,
+            tag,
+            btn,
+          ) => `<div class="row card" style="gap:10px;padding:10px 14px;align-items:center">
+        <span style="flex:1;min-width:0;overflow-wrap:anywhere"><b style="font-weight:600">${esc(email)}</b>${email.toLowerCase() === me ? ' <span class="muted small">(you)</span>' : ""}</span>
+        <span class="tag">${tag}</span>${btn}</div>`;
+          setHTML(
+            $("#lec-list"),
+            rowOf(course.lecturerEmail || "The course's owner", "Owner", "") +
+              list
+                .map((a) =>
+                  rowOf(
+                    a.email,
+                    "Lecturer",
+                    owner
+                      ? `<button type="button" class="btn btn-danger" style="min-height:40px" data-lec-del="${esc(a.email)}">Remove</button>`
+                      : a.email === me
+                        ? `<button type="button" class="btn" style="min-height:40px" data-lec-del="${esc(a.email)}">Leave course</button>`
+                        : "",
+                  ),
+                )
+                .join(""),
+          );
+        }
+
+        // =============================================================================
+        // The owner adds a lecturer by email.
+        // =============================================================================
+        $("#lec-add").addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const btn = e.target.querySelector("button");
+          btn.disabled = true;
+          const r = await API.addAdmin(course.id, $("#lec-email").value);
+          btn.disabled = false;
+          if (!r.ok) return toast(r.error);
+          toast(
+            "Added. They sign in as a lecturer with that Google account to see the course.",
+          );
+          $("#lec-email").value = "";
+          renderLecturers();
+        });
+
+        // =============================================================================
+        // Removes a lecturer (or lets a lecturer leave the course).
+        // =============================================================================
+        $("#lec-list").addEventListener("click", async (e) => {
+          const b = e.target.closest("[data-lec-del]");
+          if (!b) return;
+          const self = !owner;
+          if (
+            !(await ask({
+              title: self
+                ? "Leave this course?"
+                : `Remove ${b.dataset.lecDel}?`,
+              danger: true,
+              confirm: self ? "Leave course" : "Remove",
+              message: self
+                ? "You won't see this course any more, unless the owner adds you again."
+                : "They lose access to this course right away. You can add them again later.",
+            }))
+          )
+            return;
+          await API.removeAdmin(course.id, b.dataset.lecDel);
+          if (self) {
+            try {
+              sessionStorage.removeItem("cp.side-courses");
+            } catch (x) {}
+            return location.replace("courses.html");
+          }
+          toast("Removed");
+          renderLecturers();
+        });
+        renderLecturers();
+
+        // =============================================================================
+        // Edits the course's name and weekly lecture times.
+        // =============================================================================
+        $("#edit-course").addEventListener("click", async () => {
+          const res = await ask({
+            title: "Edit course",
+            wide: true,
+            confirm: "Save",
+            body: `<label class="field">Course name<input class="input" id="ec-name" dir="auto" value="${esc(course.name)}" required></label>${scheduleEditorHTML(course.schedule || [])}`,
+            wire: (d) => wireSchedule(d),
+            read: (d) => {
+              const name = d.querySelector("#ec-name").value.trim();
+              if (!name) {
+                d.querySelector("#ec-name").focus();
+                return null;
+              }
+              return { name, schedule: readSchedule(d) };
+            },
+          });
+          if (!res) return;
+          const r = await API.updateCourse(course.id, res);
+          if (!r.ok) return toast(r.error);
+          Object.assign(course, r.course);
+          try {
+            sessionStorage.removeItem("cp.side-courses");
+          } catch (e) {}
+          toast("Course saved");
+          location.reload();
+        });
+
+        // =============================================================================
+        // The "plan a lecture" form starts with today's date.
+        // =============================================================================
+        const now = new Date();
+        $("#s-date").value = now.toISOString().slice(0, 10);
+
+        // =============================================================================
+        // The course's lecture time for today, if it has one; otherwise now.
+        // =============================================================================
+        const todays = (course.schedule || []).filter(
+          (x) => x.day === WEEKDAYS[now.getDay()] && x.time,
+        );
+        $("#s-time").value =
+          todays[0]?.time || course.time || now.toTimeString().slice(0, 5);
+        if (todays[0] && isOnlinePlace(todays[0].place))
+          setTimeout(() => $('[data-mode="online"]').click());
+
+        // =============================================================================
+        // In class or online.
+        // =============================================================================
+        let mode = "class";
+
+        // =============================================================================
+        // The In class / Online switch. Online lectures have no Wi-Fi or location check.
+        // =============================================================================
+        $all("[data-mode]").forEach((b) =>
+          b.addEventListener("click", () => {
+            mode = b.dataset.mode;
+            $all("[data-mode]").forEach((x) =>
+              x.setAttribute("aria-pressed", String(x === b)),
+            );
+            const online = mode === "online";
+            ["#s-wifi", "#s-loc"].forEach((id) => {
+              $(id).disabled = online;
+              if (online) $(id).checked = false;
+              else $(id).checked = true;
+            });
+            $("#online-note").classList.toggle("hidden", !online);
+          }),
+        );
+
+        // =============================================================================
+        // Shows the second-check options only when the second check is turned on.
+        // =============================================================================
+        const syncRecheck = () => {
+          $("#recheck-box").classList.toggle("hidden", !$("#s-second").checked);
+          $("#r-after-f").classList.toggle(
+            "hidden",
+            $("#r-mode").value !== "after",
+          );
+          $("#r-at-f").classList.toggle("hidden", $("#r-mode").value !== "at");
+        };
+        ["#s-second", "#r-mode"].forEach((id) =>
+          $(id).addEventListener("change", syncRecheck),
+        );
+        syncRecheck();
+
+        // =============================================================================
+        // Plans a new lecture from the form.
+        // =============================================================================
+        $("#new-session").addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const btn = e.target.querySelector(".btn-dark");
+          btn.disabled = true;
+          try {
+            await API.createSession(course.id, {
+              title: $("#s-title").value,
+              when: new Date(
+                `${$("#s-date").value}T${$("#s-time").value}`,
+              ).getTime(),
+              mode,
+              wifi: $("#s-wifi").checked,
+              location: $("#s-loc").checked,
+              second: $("#s-second").checked,
+              recheck: {
+                mode: $("#r-mode").value,
+                after: Number($("#r-after").value),
+                at:
+                  $("#r-mode").value === "at" && $("#r-at").value
+                    ? new Date(
+                        `${$("#s-date").value}T${$("#r-at").value}`,
+                      ).getTime()
+                    : null,
+                window: Number($("#r-window").value),
+              },
+            });
+            if ($("#r-mode").value === "at" && !$("#r-at").value)
+              toast(
+                "No time chosen for the second check. It will wait for your button.",
+              );
+            $("#s-title").value = "";
+            toast("Session added");
+            render();
+          } finally {
+            btn.disabled = false;
+          }
+        });
+
+        // =============================================================================
+        // Month names for the big dates in the lecture list.
+        // =============================================================================
+        const MON = [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec",
+        ];
+
+        // =============================================================================
+        // One lecture in the list: its date, title, mode, attendance numbers and buttons
+        // (start, open, edit, delete).
+        // =============================================================================
+        function row(s) {
+          const d = new Date(s.scheduledAt || s.startedAt || Date.now());
+          const rc = s.recheck;
+          const second =
+            rc &&
+            (rc.mode === "after"
+              ? `2nd check · +${rc.afterMin} min`
+              : rc.mode === "at" && rc.at
+                ? `2nd check · ${new Date(rc.at).toTimeString().slice(0, 5)}`
+                : "2nd check · button");
+          const tags = [
+            s.mode === "online" ? "Online" : "In class",
+            s.checkWifi && "Wi-Fi",
+            s.checkLocation && "Location",
+            second,
+          ].filter(Boolean);
+          const count = Object.values(s.attendance).filter(
+              (r) => r.check1 || r.check2,
+            ).length,
+            total = course.students || 0;
+          const pct = total
+            ? Math.min(100, Math.round((count / total) * 100))
+            : 0;
+          const state =
+            s.state === "live"
+              ? `<span class="chip live">${s.checkin === "open" ? "Attendance open" : s.checkin === "paused" ? "Paused" : "Live"}</span>`
+              : s.state === "planned"
+                ? '<span class="chip">Planned</span>'
+                : "";
+          const actions =
+            s.state === "live"
+              ? `<a class="btn btn-accent" href="live.html?course=${course.code}&session=${s.id}">Open live room</a>`
+              : s.state === "planned"
+                ? `<button class="btn btn-primary" data-start="${s.id}">Start</button>`
+                : `<a class="btn" href="attendance.html?course=${course.code}&session=${s.id}">Sheet</a>`;
+          return `<div class="session-row ${s.state === "live" ? "live" : ""}">
+      <div class="session-date"><b>${pad2(d.getDate())}</b><span>${MON[d.getMonth()]} · ${d.toTimeString().slice(0, 5)}</span></div>
+      <div style="flex:1 1 200px;min-width:0">
+        <p class="s-title" dir="auto">${esc(s.title)} ${state}</p>
+        <div class="s-tags">${tags.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div>
+      </div>
+      ${
+        s.state === "planned"
+          ? '<div class="s-count"></div>'
+          : `<div class="s-count"><b>${count}</b><span> / ${total}</span>
+        <div class="progress" style="margin-top:6px"><div style="width:${pct}%"></div></div></div>`
+      }
+      <div class="s-actions">${actions}
+        <button class="icon-btn" data-edit="${s.id}" aria-label="Edit session">${icon("pen", 18, "currentColor", 1.8)}</button>
+        ${s.state !== "live" ? `<button class="icon-btn" data-del="${s.id}" aria-label="Delete session">${icon("trash", 18, "currentColor", 1.8)}</button>` : ""}</div>
+    </div>`;
+        }
+
+        // =============================================================================
+        // Loads the lectures (live first, then planned, then past) and draws them.
+        // =============================================================================
+        async function render() {
+          const list = (await API.listSessions(course.id)).sort(
+            (a, b) =>
+              ({ live: 0, planned: 1, ended: 2 })[a.state] -
+                { live: 0, planned: 1, ended: 2 }[b.state] ||
+              (a.state === "ended"
+                ? b.scheduledAt - a.scheduledAt
+                : a.scheduledAt - b.scheduledAt),
+          );
+          cacheSet("sessions-" + course.code, list);
+          draw(list);
+        }
+
+        // =============================================================================
+        // Draws the list of lectures.
+        // =============================================================================
+        function draw(list) {
+          lastList = list;
+          setText(
+            $("#session-count"),
+            list.length
+              ? `${list.filter((s) => s.state === "planned").length} planned · ${list.filter((s) => s.state === "ended").length} done`
+              : "",
+          );
+          setHTML(
+            $("#sessions"),
+            list.length
+              ? list.map(row).join("")
+              : `<p class="serif muted" style="font-size:24px;padding:24px 0">No sessions yet. Plan one, or press Start lecture.</p>`,
+          );
+        }
+
+        // =============================================================================
+        // The last list drawn.
+        // =============================================================================
+        let lastList = [];
+
+        // =============================================================================
+        // The buttons on each lecture: start it, open the live room, edit its title or date,
+        // delete it.
+        // =============================================================================
+        $("#sessions").addEventListener("click", async (e) => {
+          const edit = e.target.closest("[data-edit]");
+          if (edit) {
+            const s = lastList.find((x) => x.id === edit.dataset.edit);
+            if (!s) return;
+            const d = new Date(s.scheduledAt || s.startedAt || Date.now());
+            const local = new Date(
+              d.getTime() - d.getTimezoneOffset() * 60000,
+            ).toISOString();
+            const res = await ask({
+              title: "Edit session",
+              confirm: "Save",
+              body: `<label class="field">Title<input class="input" id="es-title" dir="auto" value="${esc(s.title)}"></label>
+          <div class="grid-2"><label class="field">Date<input class="input" type="date" id="es-date" value="${local.slice(0, 10)}" required></label>
+          <label class="field">Time<input class="input" type="time" id="es-time" value="${local.slice(11, 16)}" required></label></div>
+          ${s.state === "planned" ? `<label class="field">Where<select class="input" id="es-mode"><option value="class" ${s.mode !== "online" ? "selected" : ""}>In class</option><option value="online" ${s.mode === "online" ? "selected" : ""}>Online (no Wi-Fi or location check)</option></select></label>` : ""}`,
+              read: (dl) => {
+                const date = dl.querySelector("#es-date").value,
+                  time = dl.querySelector("#es-time").value;
+                if (!date || !time) return null;
+                return {
+                  title: dl.querySelector("#es-title").value.trim(),
+                  when: new Date(`${date}T${time}`).getTime(),
+                  mode: dl.querySelector("#es-mode")?.value,
+                };
+              },
+            });
+            if (!res) return;
+            try {
+              await API.updateSession(s.id, res);
+              toast("Session saved");
+              render();
+            } catch (err) {
+              toast(
+                /update_session/.test(err.message)
+                  ? "Run the latest schema.sql in Supabase first."
+                  : err.message,
+              );
+            }
+            return;
+          }
+          const start = e.target.closest("[data-start]");
+          if (start) {
+            const live = await API.activeSession(course.id);
+            if (
+              live &&
+              !(await ask({
+                title: "Start this session?",
+                message: `"${live.title}" is live now. Starting this one ends it.`,
+                confirm: "End it and start",
+              }))
+            )
+              return;
+            start.disabled = true;
+            await API.startSession(start.dataset.start);
+            window.Curtain
+              ? Curtain.go(
+                  `live.html?course=${course.code}&session=${start.dataset.start}`,
+                )
+              : (location.href = `live.html?course=${course.code}&session=${start.dataset.start}`);
+          }
+          const del = e.target.closest("[data-del]");
+          if (
+            del &&
+            (await ask({
+              title: "Delete this session?",
+              message:
+                "Its attendance is deleted with it. This can't be undone.",
+              confirm: "Delete session",
+              danger: true,
+            }))
+          ) {
+            await API.deleteSession(del.dataset.del);
+            toast("Session deleted");
+            render();
+          }
+        });
+
+        // =============================================================================
+        // Shows what this tab saw last time, then loads fresh data and keeps refreshing.
+        // =============================================================================
+        const cached = cacheGet("sessions-" + course.code);
+        if (cached) draw(cached);
+        else
+          $("#sessions").innerHTML =
+            `<div class="stack" style="padding:16px 0;gap:10px">${skeleton(3, 64)}</div>`;
+        render();
+        API.onChange(render);
+      })();
+    </script>
+    <span id="page-end" hidden></span>
+  </body>
+</html>
