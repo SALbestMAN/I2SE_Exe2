@@ -1,0 +1,343 @@
+<!doctype html>
+<!-- =============================================================================
+     One assignment on the student's side: the instructions and PDF, handing in work (a
+     file, pasted text and/or a GitHub link), and the AI review with the score and how
+     the work compares with the class (classmates stay anonymous).
+     ============================================================================= -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <meta name="theme-color" content="#F3F0E8" />
+    <meta name="darkreader-lock" />
+    <title>Homework</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Heebo:wght@400;500;600;700;800;900&family=Frank+Ruhl+Libre:wght@400;500;700&display=swap"
+    />
+    <link rel="stylesheet" href="../css/style.css?v=7.0" />
+    <script src="../js/i18n-strings.js?v=7.0"></script>
+    <script src="../js/i18n.js?v=7.0"></script>
+    <link rel="expect" href="#page-end" blocking="render" />
+  </head>
+  <body>
+    <script>
+      // =============================================================================
+      // Runs before anything is drawn. When the person arrives from (or goes into) the live
+      // room, the curtain sheet is still covering the screen, so it is put back right away
+      // and the page never flashes in between. See js/curtain.js.
+      // =============================================================================
+      try {
+        var cpO = JSON.parse(sessionStorage.getItem("cp.curtain") || "null"),
+          cpN = (performance.getEntriesByType("navigation")[0] || {}).type,
+          cpD = document.body.classList.contains("dark-screen");
+        sessionStorage.removeItem("cp.curtain");
+        if (
+          !cpO &&
+          cpN === "back_forward" &&
+          cpD !== (sessionStorage.getItem("cp.fromDark") === "1")
+        )
+          cpO = { dir: "back", color: "blue" };
+        if (cpO) {
+          var cpC = document.createElement("div");
+          cpC.className =
+            "curtain " +
+            (cpO.color === "ink" ? "ink" : "blue") +
+            (cpO.dir === "back" ? " edge-left" : " edge-right");
+          cpC.setAttribute("aria-hidden", "true");
+          cpC.dataset.dir = cpO.dir;
+          cpC.dataset.mode = "slide";
+          document.body.prepend(cpC);
+        }
+      } catch (e) {}
+    </script>
+    <div class="phone">
+      <main class="phone-main" style="gap: 14px" id="page"></main>
+    </div>
+
+    <script src="../js/config.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/api-supabase.js?v=7.0"></script>
+    <script src="../js/ai.js?v=7.0"></script>
+    <script src="../js/files.js?v=7.0"></script>
+    <script src="../js/ui.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+    <script src="../js/curtain.js?v=7.0"></script>
+    <script src="../js/motion.js?v=7.0"></script>
+    <script src="../js/printer.js?v=7.0"></script>
+    <script>
+      // =============================================================================
+      // The student homework page's code.
+      // =============================================================================
+      (async () => {
+        const me = requireRole("student");
+        renderStudentNav("courses");
+        const course = await getCourse();
+        const a = await API.getAssignment(param("a"));
+        let file = null,
+          fileText = "",
+          reading = null;
+
+        // =============================================================================
+        // Shows the assignment, the hand-in form (or what was already handed in), and the
+        // review when it is ready.
+        // =============================================================================
+        async function render() {
+          if (!a) {
+            $("#page").innerHTML =
+              `<p class="muted">Assignment not found.</p><a href="course.html?course=${course.code}&tab=homework">Back</a>`;
+            return;
+          }
+          const [sub, row] = await Promise.all([
+            API.mySubmission(a.id, me.email),
+            API.myHwRow ? API.myHwRow(a.id, me.email).catch(() => null) : null,
+          ]);
+          const link = sub?.link || row?.link || "";
+          $("#page").innerHTML = `
+      <div class="row" style="gap:8px">
+        <a class="icon-btn" href="course.html?course=${course.code}&tab=homework" aria-label="Back" style="margin-left:-10px">${icon("back", 22)}</a>
+        <div><h1 style="font-size:19px" dir="auto">${esc(a.title)}</h1><p class="small muted">${esc(course.name)}, due ${esc(a.due || "-")}</p></div>
+      </div>
+
+      <div class="cols even"><div class="col">
+      ${
+        a.briefPath
+          ? `<button class="dropzone" style="cursor:pointer;padding:12px;text-align:left;width:100%" id="brief-open">
+          <div style="flex:1;min-width:150px"><p style="font-weight:600">${icon("file", 16)} The assignment</p><p class="small muted">${esc(a.briefName || "PDF")}</p></div>
+          <span class="btn">Open</span></button>`
+          : ""
+      }
+      ${
+        a.instructions
+          ? `<section class="card stack" style="padding:16px;gap:6px"><p class="small" style="font-weight:700">Notes from the lecturer</p>
+        <p class="small" style="white-space:pre-wrap;color:var(--ink-2)" dir="auto">${esc(a.instructions)}</p></section>`
+          : ""
+      }
+
+      <p class="small muted" style="padding:0 4px">Your work is checked against the requirements in the assignment.</p>
+      </div><div class="col">
+      <div id="result"></div>
+
+      <section class="card stack" style="padding:16px;gap:12px">
+        <p style="font-weight:700">${sub ? "Hand in a new version" : "Hand in your work"}</p>
+        ${sub ? `<p class="small muted">Handed in: ${esc(sub.fileName || (sub.link ? "a link" : "text"))}, ${fmtDate(sub.createdAt)}${sub.filePath ? ` · <a href="#" id="my-file">open</a>` : ""}</p>` : ""}
+        <label class="dropzone" for="hw-file" style="cursor:pointer;padding:12px">
+          <div style="flex:1;min-width:150px"><p style="font-weight:600" id="file-name">${file ? esc(file.name) : "Choose a file"}</p>
+            <p class="small muted">PDF, Word (.docx), notebook, text or code</p></div>
+          <span class="btn">Choose</span>
+          <input type="file" id="hw-file" class="sr-only" accept="${Files.ACCEPT}">
+        </label>
+        <label class="field">Link to your repository (GitHub)<input class="input" id="hw-link" placeholder="https://github.com/you/your-repo" value="${esc(link)}" dir="ltr"></label>
+        <label class="field">or paste your answer<textarea id="hw-text" class="input" style="height:90px;padding:10px 12px;resize:vertical" dir="auto"></textarea></label>
+        <p class="small muted">The review reads your file and your repository (it must be public). Only your work is sent, not your name or email.</p>
+        <button class="btn btn-primary btn-lg" id="submit">Hand in & get a review</button>
+      </section>
+      </div></div>`;
+
+          $("#brief-open")?.addEventListener("click", () =>
+            openPath(a.briefPath),
+          );
+          $("#my-file")?.addEventListener("click", (e) => {
+            e.preventDefault();
+            openPath(sub.filePath);
+          });
+          $("#hw-file").addEventListener("change", (e) => {
+            file = e.target.files[0] || null;
+            fileText = "";
+            reading = null;
+            if (!file) return;
+            if (!Files.kindOf(file.name)) {
+              toast("Use a PDF, Word (.docx), notebook, text or code file");
+              file = null;
+            } else if (file.size > 25 * 1024 * 1024) {
+              toast("The file is too big (max 25 MB)");
+              file = null;
+            } else
+              reading = Files.textOf(file)
+                .then((t) => (fileText = t))
+                .catch(() => (fileText = ""));
+            setText($("#file-name"), file ? file.name : "Choose a file");
+          });
+          $("#submit").addEventListener("click", submit);
+          renderResult(sub);
+        }
+
+        // =============================================================================
+        // Opens a file in a new tab through a temporary link.
+        // =============================================================================
+        async function openPath(path) {
+          const w = window.open("", "_blank");
+          try {
+            const url = await API.homeworkURL(path);
+            if (w) w.location = url;
+            else location.href = url;
+          } catch (e) {
+            w?.close();
+            toast(e.message);
+          }
+        }
+
+        // =============================================================================
+        // Hands in the work: checks that the link is a web address and that there is something
+        // to hand in, then uploads the file with any text and link.
+        // =============================================================================
+        async function submit() {
+          const pasted = $("#hw-text").value.trim();
+          const link = $("#hw-link").value.trim();
+          if (link && !/^https?:\/\//i.test(link))
+            return toast("The link should start with https://");
+          if (reading) await reading;
+          const kind = file
+            ? Files.kindOf(file.name) === "pdf"
+              ? "pdf"
+              : "text"
+            : link && !pasted
+              ? "link"
+              : "text";
+          const text = file ? fileText : pasted;
+          if (!file && !link && text.length < 20)
+            return toast(
+              "Choose a file, add your repository link or paste your answer",
+            );
+          $("#submit").disabled = true;
+          setText($("#submit"), file ? "Uploading…" : "Handing in…");
+          const res = await API.submitHomework(a.id, me.email, {
+            file: API.isRemote ? file : null,
+            fileName: file?.name || (link && !pasted ? "" : "Pasted text"),
+            kind,
+            text,
+            link,
+          });
+          $("#submit").disabled = false;
+          setText($("#submit"), "Hand in & get a review");
+          if (!res.ok) return toast(res.error);
+          const sid = res.submission.id,
+            localFile = file;
+          file = null;
+          fileText = "";
+          reading = null;
+          await render();
+          if (API.isRemote || !AI.ready()) return;
+          try {
+            const scanned =
+              localFile &&
+              Files.kindOf(localFile.name) === "pdf" &&
+              text.length < 200;
+            const review = await AI.reviewSubmission(a, {
+              text: scanned ? "" : text,
+              file: scanned ? localFile : null,
+              link,
+            });
+            await API.setSubmission(sid, {
+              review,
+              status: "reviewed",
+              error: null,
+            });
+            toast("Your review is ready");
+          } catch (e) {
+            await API.setSubmission(sid, {
+              status: "error",
+              error: AI.friendly(e),
+            });
+          }
+          render();
+        }
+
+        // =============================================================================
+        // Shows the review: score, the requirements checklist, strengths, what to improve, and
+        // where the work stands in the class.
+        // =============================================================================
+        async function renderResult(sub) {
+          if (!sub) return;
+          if (sub.status === "reviewing" && !sub.review) {
+            $("#result").innerHTML =
+              `<section class="card" style="padding:16px"><p style="font-weight:600">Submitted ✓</p><p class="small muted">${API.isRemote ? "Your review appears here when it's ready (usually within a few minutes)." : "Reviewing your work… this takes a few seconds."}</p></section>`;
+            clearTimeout(renderResult.t);
+            renderResult.t = setTimeout(render, 5000);
+            return;
+          }
+          if (sub.status === "error" && !sub.review) {
+            $("#result").innerHTML =
+              `<section class="card" style="padding:16px"><p style="font-weight:600">Submitted ✓</p><p class="small" style="color:var(--warn-ink)">The review failed: ${esc(sub.error)}</p></section>`;
+            return;
+          }
+          const r = sub.review,
+            max = a.rubric.reduce((s, x) => s + x.points, 0),
+            total = API.totalOf(r);
+          const st = await API.classStats(a.id);
+          const enough = st.n >= 3;
+          const better = enough
+            ? Math.round(
+                (st.totals.filter((t) => t < total).length / st.totals.length) *
+                  100,
+              )
+            : null;
+          $("#result").innerHTML = `
+      <section class="card stack" style="padding:18px;gap:12px">
+        <div class="row" style="justify-content:space-between;align-items:baseline">
+          <p style="font-weight:700">Your review</p>
+          <div class="row" style="gap:10px"><p class="small muted">${esc(sub.fileName)}, ${fmtDate(sub.createdAt)}</p>
+            <button class="btn" style="min-height:36px;padding:0 12px" id="print-review">${icon("print", 16)}Print</button></div></div>
+        <p style="font:700 34px var(--display)">${total}<span class="muted" style="font-size:18px"> / ${max}</span></p>
+        <p style="font-size:15px;line-height:1.55" dir="auto">${esc(r.summary || "")}</p>
+        ${r.criteria.length > 1 ? r.criteria.map((c) => `<div class="row" style="justify-content:space-between;gap:8px"><span class="small">${esc(c.name)}</span><b class="small">${c.score} / ${c.max}</b></div>`).join("") : ""}
+        ${(r.requirements || []).length ? `<div class="stack" style="gap:6px"><p class="label">The assignment, point by point</p>${r.requirements.map((q) => `<div class="req-line ${esc(q.status)}" dir="auto"><b>${{ done: "✓", partial: "◐", missing: "✗" }[q.status] || "·"}</b><span>${esc(q.item)}${q.note ? `<em>${esc(q.note)}</em>` : ""}</span></div>`).join("")}</div>` : ""}
+        ${(r.strengths || []).length ? `<div class="stack" style="gap:4px"><p class="label">What you did well</p><ul class="plain-list">${r.strengths.map((x) => `<li dir="auto">${esc(x)}</li>`).join("")}</ul></div>` : ""}
+        ${(r.improvements || []).length ? `<div class="stack" style="gap:4px"><p class="label">To improve</p><ul class="plain-list">${r.improvements.map((x) => `<li dir="auto">${esc(x)}</li>`).join("")}</ul></div>` : ""}
+        ${(r.tips || []).length ? `<div class="stack" style="gap:4px"><p class="label">Ideas, not graded</p><ul class="plain-list muted">${r.tips.map((x) => `<li dir="auto">${esc(x)}</li>`).join("")}</ul></div>` : ""}
+      </section>
+      <section class="card stack" style="padding:16px;gap:8px">
+        <p style="font-weight:700">Compared with the class</p>
+        ${
+          sub.comparison
+            ? `<p class="small" dir="auto">${esc(sub.comparison.standing || "")}</p>
+          ${(sub.comparison.ahead || []).length ? `<p class="small" dir="auto"><b>Where you're ahead:</b> ${sub.comparison.ahead.map(esc).join("; ")}</p>` : ""}
+          ${(sub.comparison.behind || []).length ? `<p class="small" dir="auto"><b>What most classmates did that you didn't:</b> ${sub.comparison.behind.map(esc).join("; ")}</p>` : ""}
+          ${sub.comparison.different_approach ? `<p class="small" dir="auto"><b>Your approach:</b> ${esc(sub.comparison.different_approach)}</p>` : ""}
+          ${(sub.comparison.learn_from || []).length ? `<p class="small" dir="auto"><b>Ideas from the class:</b> ${sub.comparison.learn_from.map(esc).join("; ")}</p>` : ""}`
+            : ""
+        }
+        ${
+          enough
+            ? `<p class="small">Your score is higher than <b>${better}%</b> of the ${st.n} reviewed submissions. Class average: <b>${Math.round(st.avg * 10) / 10} / ${max}</b>.</p>
+          <p class="small muted">The black line on each bar is the class average. You never see other students' work.</p>`
+            : `<p class="small muted">The comparison appears when at least 3 classmates have been reviewed (now ${st.n}).</p>`
+        }
+        ${
+          (a.insights?.common_mistakes || []).length
+            ? `<p class="small" style="font-weight:700;margin-top:6px">Common mistakes in the class</p>
+          <ul style="margin:0;padding-inline-start:20px" class="small">${a.insights.common_mistakes.map((m) => `<li>${esc(m.issue)}</li>`).join("")}</ul>`
+            : ""
+        }
+      </section>`;
+          $("#print-review").addEventListener("click", () =>
+            Printer.open({
+              title: "Your review",
+              sub: a.title,
+              when: "end",
+              done: "Sent to your printer",
+              rows: [["Score", `${total} / ${max}`]],
+              note: course.name,
+              action: () =>
+                Printer.printHTML(
+                  `Review, ${a.title}`,
+                  `<h1 dir="auto">${esc(a.title)}</h1><p class="muted">${esc(course.name)}, review of ${esc(sub.fileName)}</p>
+        <h2>${total} / ${max}</h2><p dir="auto">${esc(r.summary || "")}</p>
+        ${(r.requirements || []).length ? `<h3>The assignment, point by point</h3><ul>${r.requirements.map((q) => `<li dir="auto">${{ done: "✓", partial: "◐", missing: "✗" }[q.status] || "·"} ${esc(q.item)}${q.note ? " (" + esc(q.note) + ")" : ""}</li>`).join("")}</ul>` : ""}
+        ${(r.strengths || []).length ? `<h3>What you did well</h3><ul>${r.strengths.map((x) => `<li dir="auto">${esc(x)}</li>`).join("")}</ul>` : ""}
+        ${(r.improvements || []).length ? `<h3>To improve</h3><ul>${r.improvements.map((x) => `<li dir="auto">${esc(x)}</li>`).join("")}</ul>` : ""}`,
+                ),
+            }),
+          );
+        }
+
+        render();
+      })();
+    </script>
+    <span id="page-end" hidden></span>
+  </body>
+</html>
