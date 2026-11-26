@@ -1,420 +1,1492 @@
 // =============================================================================
-// The site's language: English, Hebrew or Arabic. The pages are written in English;
-// this translates what they show (text, placeholders, labels, titles) as it appears on
-// screen. Numbers, times, dates, day and month names are kept, and what people wrote
-// themselves (course names, questions, summaries) is never touched.
+// The translations of every phrase the site shows, written as "English": ["Hebrew",
+// "Arabic"]. {0} and {1} stand for numbers, times and dates, which are kept as they
+// are. "*" stands for a name or other text that is kept; it appears as $1 in the
+// translation. js/i18n.js explains how they are used.
 // =============================================================================
-var I18N = (() => {
+var I18N_STRINGS = {
   // =============================================================================
-  // The three languages and their writing direction, and the language this person chose
-  // last time (English by default).
+  // The sign-in page.
   // =============================================================================
-  const LANGS = {
-    en: { name: "English", dir: "ltr" },
-    he: { name: "עברית", dir: "rtl" },
-    ar: { name: "العربية", dir: "rtl" },
-  };
-  let lang = "en";
-  try {
-    lang = localStorage.getItem("cp.lang") || "en";
-  } catch (e) {}
-  if (!LANGS[lang]) lang = "en";
+  "Check in": ["צ'ק-אין", "تسجيل الحضور"],
+  "with two scans": ["בשתי סריקות", "بمسحتين"],
+  Ask: ["שואלים", "اسأل"],
+  "without raising a hand": ["בלי להרים יד", "دون رفع اليد"],
+  Read: ["קוראים", "اقرأ"],
+  "every lecture's summary": ["את הסיכום של כל הרצאה", "ملخص كل محاضرة"],
+  "Signed in": ["מחובר", "تم تسجيل الدخول"],
+  Opening: ["פותחים", "نفتح"],
+  "your shelf…": ["את המדף שלך…", "رفّك…"],
+  "Step 1 of 2": ["שלב 1 מתוך 2", "الخطوة 1 من 2"],
+  "Who's": ["מי", "من"],
+  "signing in?": ["מתחבר?", "يسجّل الدخول؟"],
+  Student: ["סטודנט", "طالب"],
+  "check in, ask, catch up": ["נוכחות, שאלות, השלמות", "حضور، أسئلة، متابعة"],
+  Lecturer: ["מרצה", "محاضر"],
+  "run the room, read the room": [
+    "מנהלים את הכיתה, מבינים את הכיתה",
+    "أدِر الصف وافهمه",
+  ],
+  "Continue with Google": ["המשך עם Google", "المتابعة باستخدام Google"],
+  "Use the Google account whose email is on your lecturer's course list. Not on it? You can still join with a code, and your lecturer approves it.":
+    [
+      "התחברו עם חשבון Google שהמייל שלו ברשימת הקורס של המרצה. לא ברשימה? אפשר להצטרף עם קוד, והמרצה יאשר.",
+      "استخدم حساب Google الموجود بريده في قائمة المساق لدى المحاضر. لست في القائمة؟ يمكنك الانضمام برمز، والمحاضر يوافق.",
+    ],
+  "Create courses, plan sessions, bring in the student list and see who was there. Use your university Google account.":
+    [
+      "יוצרים קורסים, מתכננים מפגשים, מעלים את רשימת הסטודנטים ורואים מי היה. התחברו עם חשבון Google של האוניברסיטה.",
+      "أنشئ مساقات، خطّط اللقاءات، أضف قائمة الطلاب وشاهد من حضر. استخدم حساب Google الجامعي.",
+    ],
+  Welcome: ["ברוכים הבאים", "أهلاً بك"],
+  Logo: ["לוגו", "الشعار"],
+  "Sign in": ["התחברות", "تسجيل الدخول"],
+  "to your class.": ["לכיתה שלך.", "إلى صفّك."],
+  "to your": ["לכיתה", "إلى"],
+  "class.": ["שלך.", "صفّك."],
+  Role: ["תפקיד", "الدور"],
+  Language: ["שפה", "اللغة"],
+  "Semester A": ["סמסטר א'", "الفصل الأول"],
+  "Semester B": ["סמסטר ב'", "الفصل الثاني"],
+  Summer: ["קיץ", "الصيفي"],
+  "not signed in": ["לא מחובר", "غير مسجّل الدخول"],
 
   // =============================================================================
-  // Sets the page's language and direction (right-to-left for Hebrew and Arabic) before
-  // anything is drawn.
+  // The left column and the account menu.
   // =============================================================================
-  const root = document.documentElement;
-  root.lang = lang;
-  root.dir = LANGS[lang].dir;
+  Today: ["היום", "اليوم"],
+  "My shelf": ["המדף שלי", "رفّي"],
+  Attendance: ["נוכחות", "الحضور"],
+  "My questions": ["השאלות שלי", "أسئلتي"],
+  Courses: ["קורסים", "المساقات"],
+  Live: ["בשידור", "مباشر"],
+  "Live room": ["חדר הרצאה", "غرفة المحاضرة"],
+  Inbox: ["תיבת שאלות", "صندوق الأسئلة"],
+  "Join requests": ["בקשות הצטרפות", "طلبات الانضمام"],
+  "Sign out": ["התנתקות", "تسجيل الخروج"],
+  Main: ["ראשי", "الرئيسية"],
+  Home: ["בית", "الرئيسية"],
+  Places: ["מקומות", "الأقسام"],
+  "Account: *": ["חשבון: $1", "الحساب: $1"],
+  Close: ["סגירה", "إغلاق"],
+  "My courses": ["הקורסים שלי", "مساقاتي"],
+  "Your courses": ["הקורסים שלך", "مساقاتك"],
 
   // =============================================================================
-  // True when the page needs translating, and which column of the dictionary to use (0 =
-  // Hebrew, 1 = Arabic).
+  // The student's home page.
   // =============================================================================
-  const on = lang !== "en";
-  const col = lang === "he" ? 0 : 1;
+  "Live now": ["בשידור עכשיו", "مباشر الآن"],
+  "Live now · Lecture {0} · since {1}": [
+    "בשידור עכשיו · הרצאה {0} · מאז {1}",
+    "مباشر الآن · المحاضرة {0} · منذ {1}",
+  ],
+  "✓ You're checked in": ["✓ הנוכחות שלך נרשמה", "✓ تم تسجيل حضورك"],
+  "Tap a book to bring it forward": [
+    "הקישו על ספר כדי להביא אותו קדימה",
+    "اضغط على كتاب لإحضاره للأمام",
+  ],
+  "Vol. {0}": ["כרך {0}", "مجلد {0}"],
+  "{0} lectures": ["{0} הרצאות", "{0} محاضرات"],
+  "{0} lecture": ["הרצאה {0}", "محاضرة {0}"],
+  "1 lecture": ["הרצאה אחת", "محاضرة واحدة"],
+  "Add a": ["הוספת", "أضف"],
+  book: ["ספר", "كتاباً"],
+  "Join with a code": ["הצטרפות עם קוד", "انضم برمز"],
+  "Open course": ["פתיחת הקורס", "فتح المساق"],
+  Tomorrow: ["מחר", "غداً"],
+  "Hi,": ["היי,", "مرحباً،"],
+  "Hi.": ["היי.", "مرحباً."],
+  "Hi, *.": ["היי, $1.", "مرحباً، $1."],
+  "*, live now": ["$1, בשידור עכשיו", "$1، مباشر الآن"],
+  "Add a book: join a course": [
+    "הוספת ספר: הצטרפות לקורס",
+    "أضف كتاباً: انضم إلى مساق",
+  ],
+  "Previous course": ["הקורס הקודם", "المساق السابق"],
+  "Next course": ["הקורס הבא", "المساق التالي"],
+  "{0} of {1}": ["{0} מתוך {1}", "{0} من {1}"],
+  "Up next": ["בקרוב", "التالي"],
+  Up: ["מה", "ما"],
+  next: ["בהמשך", "التالي"],
+  "Nothing planned yet.": ["עוד לא תוכנן כלום.", "لا شيء مخطّط بعد."],
+  "Selected course": ["הקורס שנבחר", "المساق المختار"],
 
   // =============================================================================
-  // The dictionary: exact phrases, and phrases with a "*" for a name or other text that
-  // stays as it is.
+  // The course page on the student's side.
   // =============================================================================
-  const EXACT = new Map(),
-    WILD = [];
+  "Lecture {0} live": ["הרצאה {0} בשידור", "المحاضرة {0} مباشرة"],
+  Summaries: ["סיכומים", "الملخصات"],
+  Homework: ["שיעורי בית", "الواجبات"],
+  "You're offline.": ["אין חיבור לאינטרנט.", "أنت غير متصل."],
+  "Messages are saved and sent when you're back online.": [
+    "ההודעות נשמרות ונשלחות כשהחיבור חוזר.",
+    "تُحفظ الرسائل وتُرسل عند عودة الاتصال.",
+  ],
+  "You're": ["הנוכחות", "تم"],
+  "checked in.": ["נרשמה.", "تسجيل حضورك."],
+  "{0}, Keep the app open for the second check": [
+    "{0}, השאירו את האפליקציה פתוחה לבדיקה השנייה",
+    "{0}، أبقِ التطبيق مفتوحاً للتحقق الثاني",
+  ],
+  "{0}, Lecture {1}": ["{0}, הרצאה {1}", "{0}، المحاضرة {1}"],
+  "Second check done at {0}": [
+    "הבדיקה השנייה בוצעה ב-{0}",
+    "تم التحقق الثاني الساعة {0}",
+  ],
+  "Second check:": ["בדיקה שנייה:", "التحقق الثاني:"],
+  "scan now.": ["סרקו עכשיו.", "امسح الآن."],
+  Scan: ["סריקה", "مسح"],
+  Slides: ["מצגת", "الشرائح"],
+  "Follow the lecturer": ["לעקוב אחרי המרצה", "تابع المحاضر"],
+  "Ask about this slide": ["שאלה על השקף הזה", "اسأل عن هذه الشريحة"],
+  "Open PDF": ["פתיחת PDF", "فتح PDF"],
+  Download: ["הורדה", "تنزيل"],
+  "Your question or comment": ["השאלה או ההערה שלך", "سؤالك أو تعليقك"],
+  "Post anonymously": ["פרסום אנונימי", "نشر دون اسم"],
+  "About slide {0}": ["על שקף {0}", "عن الشريحة {0}"],
+  "Slide {0}": ["שקף {0}", "الشريحة {0}"],
+  "Show slide {0}": ["הצגת שקף {0}", "عرض الشريحة {0}"],
+  Send: ["שליחה", "إرسال"],
+  Top: ["מובילות", "الأعلى"],
+  Newest: ["חדשות", "الأحدث"],
+  Answered: ["נענו", "تمت الإجابة"],
+  Anonymous: ["אנונימי", "مجهول"],
+  You: ["את/ה", "أنت"],
+  "Lecturer replied": ["המרצה ענה", "ردّ المحاضر"],
+  "Live poll": ["סקר חי", "تصويت مباشر"],
+  "{0} left": ["נשארו {0}", "متبقٍ {0}"],
+  "{0} seconds left": ["נשארו {0} שניות", "متبقٍ {0} ثانية"],
+  "Tap an answer.": ["הקישו על תשובה.", "اضغط على إجابة."],
+  "My attendance": ["הנוכחות שלי", "حضوري"],
+  Details: ["פרטים", "التفاصيل"],
+  "Latest summary": ["הסיכום האחרון", "آخر ملخص"],
+  "Lecture {0}, {1}": ["הרצאה {0}, {1}", "المحاضرة {0}، {1}"],
+  "Read summary": ["קריאת הסיכום", "اقرأ الملخص"],
+  "From the lectures": ["מההרצאות", "من المحاضرات"],
+  Print: ["הדפסה", "طباعة"],
+  "Due {0}": ["להגשה עד {0}", "التسليم {0}"],
+  "Due -": ["ללא תאריך הגשה", "بلا موعد تسليم"],
+  "Not handed in": ["לא הוגש", "لم يُسلَّم"],
+  "Handed in": ["הוגש", "سُلِّم"],
+  "Your attendance": ["הנוכחות שלך", "حضورك"],
+  "{0} present · {1} partial · {2} absent": [
+    "{0} נוכח · {1} חלקי · {2} נעדר",
+    "{0} حاضر · {1} جزئي · {2} غائب",
+  ],
+  "of {0} lectures": ["מתוך {0} הרצאות", "من {0} محاضرات"],
+  "Partial counts as half. Only you can see this page.": [
+    "נוכחות חלקית נחשבת חצי. רק את/ה רואה את הדף הזה.",
+    "الحضور الجزئي يُحسب نصفاً. أنت فقط ترى هذه الصفحة.",
+  ],
+  "Checked in, {0}": ["נרשמת, {0}", "سُجّل الحضور، {0}"],
+  "checked in, {0}": ["נרשמת, {0}", "سُجّل الحضور، {0}"],
+  "Both checks done, {0}": ["שתי הבדיקות בוצעו, {0}", "تم التحققان، {0}"],
+  "both checks, {0}": ["שתי הבדיקות, {0}", "التحققان، {0}"],
+  "both checks": ["שתי הבדיקות", "التحققان"],
+  "Missed the second check, {0}": [
+    "פספסת את הבדיקה השנייה, {0}",
+    "فاتك التحقق الثاني، {0}",
+  ],
+  "missed the second check, {0}": [
+    "פספסת את הבדיקה השנייה, {0}",
+    "فاتك التحقق الثاني، {0}",
+  ],
+  "Ask lecturer": ["לבקש מהמרצה", "اطلب من المحاضر"],
+  "Couldn't check in? Use": [
+    "לא הצלחת להירשם? השתמשו ב",
+    "لم تستطع تسجيل الحضور؟ استخدم",
+  ],
+  "on that lecture. Your lecturer decides.": [
+    "באותה הרצאה. המרצה מחליט.",
+    "في تلك المحاضرة. المحاضر يقرّر.",
+  ],
+  "Course sections": ["חלקי הקורס", "أقسام المساق"],
+  "Lecture slides": ["שקפי ההרצאה", "شرائح المحاضرة"],
+  "Current slide": ["השקף הנוכחי", "الشريحة الحالية"],
+  "Previous slide": ["השקף הקודם", "الشريحة السابقة"],
+  "Next slide": ["השקף הבא", "الشريحة التالية"],
+  "Full screen": ["מסך מלא", "ملء الشاشة"],
+  "Leave full screen": ["יציאה ממסך מלא", "الخروج من ملء الشاشة"],
+  "Ask anything.": ["שאלו כל דבר.", "اسأل أي شيء."],
+  Ask: ["שאלו", "اسأل"],
+  "anything.": ["כל דבר.", "أي شيء."],
+  "Type a question or a comment for the lecturer…": [
+    "כתבו שאלה או הערה למרצה…",
+    "اكتب سؤالاً أو تعليقاً للمحاضر…",
+  ],
+  "Sort questions": ["מיון שאלות", "ترتيب الأسئلة"],
+  "Upvote, {0} votes": ["הצבעה, {0} קולות", "تصويت، {0} أصوات"],
+  "Upvote, {0} vote": ["הצבעה, קול {0}", "تصويت، صوت {0}"],
+  Poll: ["סקר", "تصويت"],
+  Nothing: ["אין", "لا شيء"],
+  "to vote on yet.": ["סקר כרגע.", "للتصويت بعد."],
+  "It appears here the moment your lecturer opens one.": [
+    "הוא יופיע כאן ברגע שהמרצה יפתח סקר.",
+    "يظهر هنا لحظة يفتح المحاضر تصويتاً.",
+  ],
+  "Lecture materials": ["חומרי ההרצאה", "مواد المحاضرة"],
+  "{0}% attendance": ["{0}% נוכחות", "{0}% حضور"],
+  Present: ["נוכח", "حاضر"],
+  Partial: ["חלקי", "جزئي"],
+  Absent: ["נעדר", "غائب"],
+  Overall: ["סך הכל", "الإجمالي"],
+  "Your record.": ["הרישום שלך.", "سجلّك."],
+  "{0} asked · {1} answered": ["{0} נשאלו · {1} נענו", "{0} سؤال · {1} أُجيب"],
+  All: ["הכל", "الكل"],
+  Waiting: ["ממתינות", "بانتظار الرد"],
+  "My questions.": ["השאלות שלי.", "أسئلتي."],
+  Show: ["הצגה", "عرض"],
+  "{0} votes": ["{0} קולות", "{0} أصوات"],
+  votes: ["קולות", "أصوات"],
+  "Nothing here.": ["אין כאן כלום.", "لا شيء هنا."],
+  "You haven't asked anything yet. Every course has an Ask box.": [
+    "עוד לא שאלת כלום. בכל קורס יש תיבת שאלות.",
+    "لم تسأل شيئاً بعد. في كل مساق صندوق للأسئلة.",
+  ],
+  "No questions yet. Ask the first one.": [
+    "עוד אין שאלות. שאלו את הראשונה.",
+    "لا أسئلة بعد. اطرح أول سؤال.",
+  ],
+  "Nothing answered yet.": ["עוד לא נענה כלום.", "لم يُجب عن شيء بعد."],
+  "Waiting to send": ["ממתין לשליחה", "بانتظار الإرسال"],
+  "No summaries yet.": ["עוד אין סיכומים.", "لا ملخصات بعد."],
+  "They appear here when your lecturer shares them.": [
+    "הם יופיעו כאן כשהמרצה ישתף אותם.",
+    "تظهر هنا عندما يشاركها المحاضر.",
+  ],
+  "Nothing yet. It starts after your first lecture.": [
+    "עוד אין. זה מתחיל אחרי ההרצאה הראשונה.",
+    "لا شيء بعد. يبدأ بعد أول محاضرة.",
+  ],
+  "No courses yet.": ["עוד אין קורסים.", "لا مساقات بعد."],
+  "Join one from your shelf": ["הצטרפו לקורס מהמדף", "انضم إلى مساق من رفّك"],
+  "Saved. It will be sent when you're back online": [
+    "נשמר. יישלח כשהחיבור יחזור",
+    "حُفظ. سيُرسل عند عودة الاتصال",
+  ],
+  "Posted anonymously": ["פורסם באנונימיות", "نُشر دون اسم"],
+  Posted: ["פורסם", "نُشر"],
+  "Wait a few seconds between messages": [
+    "חכו כמה שניות בין הודעות",
+    "انتظر بضع ثوانٍ بين الرسائل",
+  ],
+  "Semester A · only you can see this page": [
+    "סמסטר א' · רק את/ה רואה את הדף הזה",
+    "الفصل الأول · أنت فقط ترى هذه الصفحة",
+  ],
+  "only you can see this page": [
+    "רק את/ה רואה את הדף הזה",
+    "أنت فقط ترى هذه الصفحة",
+  ],
 
   // =============================================================================
-  // Makes text safe to use inside a regular expression.
+  // Homework on the student's side.
   // =============================================================================
-  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  "*, due {0}": ["$1, להגשה עד {0}", "$1، التسليم {0}"],
+  "Notes from the lecturer": ["הערות מהמרצה", "ملاحظات المحاضر"],
+  "Your work is checked against the requirements in the assignment.": [
+    "העבודה שלך נבדקת מול הדרישות של המטלה.",
+    "يُقيَّم عملك حسب متطلبات الواجب.",
+  ],
+  "Your review": ["המשוב שלך", "تقييمك"],
+  "Pasted text, {0}": ["טקסט מודבק, {0}", "نص ملصق، {0}"],
+  "What you did well": ["מה עשית טוב", "ما أحسنت فيه"],
+  "To improve": ["לשיפור", "للتحسين"],
+  "Compared with the class": ["בהשוואה לכיתה", "مقارنة بالصف"],
+  "Your score is higher than": ["הציון שלך גבוה מ-", "علامتك أعلى من"],
+  "of the {0} reviewed submissions. Class average:": [
+    "מתוך {0} ההגשות שנבדקו. ממוצע הכיתה:",
+    "من {0} تسليمات تم تقييمها. معدل الصف:",
+  ],
+  "The black line on each bar is the class average. You never see other students' work.":
+    [
+      "הקו השחור בכל עמודה הוא ממוצע הכיתה. את העבודות של אחרים לא רואים אף פעם.",
+      "الخط الأسود على كل عمود هو معدل الصف. لا ترى أعمال الطلاب الآخرين أبداً.",
+    ],
+  "Common mistakes in the class": [
+    "טעויות נפוצות בכיתה",
+    "أخطاء شائعة في الصف",
+  ],
+  "Hand in a new version": ["הגשת גרסה חדשה", "سلّم نسخة جديدة"],
+  "Handed in: *": ["הוגש: $1", "سُلِّم: $1"],
+  "Choose a file": ["בחירת קובץ", "اختر ملفاً"],
+  "PDF, Word (.docx), notebook, text or code": [
+    "PDF, Word (.docx), מחברת, טקסט או קוד",
+    "PDF أو Word (.docx) أو دفتر أو نص أو كود",
+  ],
+  Choose: ["בחירה", "اختر"],
+  "Link to your repository (GitHub)": [
+    "קישור למאגר שלך (GitHub)",
+    "رابط المستودع (GitHub)",
+  ],
+  "or paste your answer": ["או הדביקו את התשובה", "أو الصق إجابتك"],
+  "The review reads your file and your repository (it must be public). Only your work is sent to the AI, never your name.":
+    [
+      "הבדיקה קוראת את הקובץ ואת המאגר שלך (הוא חייב להיות ציבורי). רק העבודה נשלחת ל-AI, לא השם שלך.",
+      "يقرأ التقييم ملفك ومستودعك (يجب أن يكون عاماً). يُرسل عملك فقط إلى الذكاء الاصطناعي، وليس اسمك.",
+    ],
+  "Hand in & get a review": ["הגשה וקבלת משוב", "سلّم واحصل على تقييم"],
+  Back: ["חזרה", "رجوع"],
+  Requirements: ["דרישות", "المتطلبات"],
+  Good: ["טוב", "جيد"],
+  Tips: ["טיפים", "نصائح"],
+  Done: ["בוצע", "مُنجز"],
+  Partly: ["חלקית", "جزئياً"],
+  Missing: ["חסר", "ناقص"],
+  "Open the assignment": ["פתיחת המטלה", "فتح الواجب"],
+  "The assignment": ["המטלה", "الواجب"],
 
   // =============================================================================
-  // Fills the dictionary from the phrase table. "Remove *" becomes a pattern that
-  // matches "Remove" followed by any name.
+  // The check-in (scan) screen.
   // =============================================================================
-  function load(table) {
-    for (const [k, v] of Object.entries(table || {})) {
-      const val = v[col];
-      if (!val) continue;
-      if (k.includes("*")) {
-        WILD.push([
-          new RegExp("^" + esc(k).replace(/\\\*/g, "(.+?)") + "$"),
-          val,
-        ]);
-      } else EXACT.set(k, val);
-    }
-  }
-  if (on && typeof I18N_STRINGS === "object") load(I18N_STRINGS);
+  "Point at the projector": ["כוונו למקרן", "وجّه نحو جهاز العرض"],
+  Checked: ["כבר", "سُجّل"],
+  "in already.": ["נרשמת.", "حضورك مسبقاً."],
+  Frames: ["פריימים", "إطارات"],
+  "Keep the app open. A second check may come during class.": [
+    "השאירו את האפליקציה פתוחה. ייתכן שתהיה בדיקה שנייה במהלך השיעור.",
+    "أبقِ التطبيق مفتوحاً. قد يأتي تحقق ثانٍ خلال الحصة.",
+  ],
+  Continue: ["המשך", "متابعة"],
+  "Try again": ["נסו שוב", "حاول مجدداً"],
+  "Still can't check in? Ask the lecturer": [
+    "עדיין לא מצליחים? בקשו מהמרצה",
+    "ما زلت لا تستطيع؟ اطلب من المحاضر",
+  ],
+  Cancel: ["ביטול", "إلغاء"],
+  Camera: ["מצלמה", "الكاميرا"],
+  "Frames captured": ["פריימים שנקלטו", "الإطارات الملتقطة"],
+  "Hold steady.": ["החזיקו יציב.", "ثبّت الهاتف."],
+  "The lecturer hasn't started check-in for this course yet.": [
+    "המרצה עוד לא פתח נוכחות בקורס הזה.",
+    "لم يبدأ المحاضر تسجيل الحضور لهذا المساق بعد.",
+  ],
+  "Point the camera at the code on the projector and hold still for 2 seconds.":
+    [
+      "כוונו את המצלמה לקוד שעל המקרן והחזיקו יציב 2 שניות.",
+      "وجّه الكاميرا نحو الرمز على جهاز العرض وثبّتها ثانيتين.",
+    ],
+  "Get closer to the projector, or make the code bigger on the screen.": [
+    "התקרבו למקרן, או הגדילו את הקוד על המסך.",
+    "اقترب من جهاز العرض أو كبّر الرمز على الشاشة.",
+  ],
+  "Your phone couldn't reach the server. Check the Wi-Fi and try again.": [
+    "הטלפון לא הצליח להגיע לשרת. בדקו את ה-Wi-Fi ונסו שוב.",
+    "لم يتمكن هاتفك من الوصول إلى الخادم. تحقق من الواي فاي وحاول مجدداً.",
+  ],
+  "Fix what's marked below and try again.": [
+    "תקנו את מה שמסומן למטה ונסו שוב.",
+    "أصلح ما هو مُعلَّم أدناه وحاول مجدداً.",
+  ],
+  "Your lecturer will decide. You'll see the answer in the course's Attendance tab.":
+    [
+      "המרצה יחליט. התשובה תופיע בלשונית הנוכחות של הקורס.",
+      "سيقرّر المحاضر. سترى الجواب في تبويب الحضور في المساق.",
+    ],
 
   // =============================================================================
-  // Day and month names in English, the way they appear in the pages.
+  // The lecturer's course list.
   // =============================================================================
-  const DAYS_S = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const DAYS_L = [
-    "Sunday",
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-  ];
-  const MON_S = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  const MON_L = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
-  const WORD = new Map();
-  if (on) {
-    // =============================================================================
-    // The date format of the chosen language, and a known Sunday to start counting days
-    // from.
-    // =============================================================================
-    const loc = lang === "he" ? "he-IL" : "ar";
-    const d0 = new Date(2024, 0, 7);
-
-    // =============================================================================
-    // Translates the day names (short and long) into the chosen language.
-    // =============================================================================
-    DAYS_S.forEach((d, i) => {
-      const day = new Date(d0.getTime() + i * 864e5);
-      WORD.set(
-        d,
-        new Intl.DateTimeFormat(loc, { weekday: "short" }).format(day),
-      );
-      WORD.set(
-        DAYS_L[i],
-        new Intl.DateTimeFormat(loc, { weekday: "long" }).format(day),
-      );
-    });
-
-    // =============================================================================
-    // Translates the month names (short and long) into the chosen language.
-    // =============================================================================
-    MON_S.forEach((m, i) => {
-      const day = new Date(2024, i, 15);
-      WORD.set(m, new Intl.DateTimeFormat(loc, { month: "short" }).format(day));
-      WORD.set(
-        MON_L[i],
-        new Intl.DateTimeFormat(loc, { month: "long" }).format(day),
-      );
-    });
-  }
+  "New course": ["קורס חדש", "مساق جديد"],
+  New: ["קורס", "مساق"],
+  course: ["חדש", "جديد"],
+  "Blank book": ["ספר ריק", "كتاب فارغ"],
+  "{0} students · {1} sessions": [
+    "{0} סטודנטים · {1} מפגשים",
+    "{0} طالب · {1} لقاءات",
+  ],
+  "{0} students": ["{0} סטודנטים", "{0} طالب"],
+  "{0} student": ["סטודנט {0}", "طالب {0}"],
+  "1 student": ["סטודנט אחד", "طالب واحد"],
+  "{0} sessions": ["{0} מפגשים", "{0} لقاءات"],
+  "1 session": ["מפגש אחד", "لقاء واحد"],
+  "{0} courses": ["{0} קורסים", "{0} مساقات"],
+  "1 course": ["קורס אחד", "مساق واحد"],
+  "an empty shelf": ["מדף ריק", "رفّ فارغ"],
+  Students: ["סטודנטים", "الطلاب"],
+  Sessions: ["מפגשים", "اللقاءات"],
+  Lectures: ["הרצאות", "المحاضرات"],
+  "● Live now": ["● בשידור עכשיו", "● مباشر الآن"],
+  "1 join request": ["בקשת הצטרפות אחת", "طلب انضمام واحد"],
+  "{0} join requests": ["{0} בקשות הצטרפות", "{0} طلبات انضمام"],
+  "Open live room": ["פתיחת חדר ההרצאה", "فتح غرفة المحاضرة"],
+  "Start lecture": ["התחלת הרצאה", "بدء المحاضرة"],
 
   // =============================================================================
-  // What a number looks like (13, 10:30, 25/11, 2026-11-23).
+  // Titles written in two styles. The "|" marks where the bold part ends and the serif
+  // part begins.
   // =============================================================================
-  const NUM = "\\d+(?:[.:/\\-]\\d+)*";
-  const NAMES = [...DAYS_L, ...MON_L, ...DAYS_S, ...MON_S].join("|");
-  const PIECE = `(?:${NUM}|(?:${NAMES})\\b)`;
+  "Your shelf.": ["המדף שלך.", "رفّك."],
+  Your: ["המדף", "رفّك"],
+  "shelf.": ["שלך.", "."],
+  "Copy join code *": ["העתקת קוד הצטרפות $1", "نسخ رمز الانضمام $1"],
+  "Course name": ["שם הקורס", "اسم المساق"],
+  "e.g. Software Engineering": ["למשל: הנדסת תוכנה", "مثلاً: هندسة البرمجيات"],
+  Create: ["יצירה", "إنشاء"],
+  "Join code": ["קוד הצטרפות", "رمز الانضمام"],
+  "students type it to join": [
+    "הסטודנטים מקלידים אותו כדי להצטרף",
+    "يكتبه الطلاب للانضمام",
+  ],
+  "Created *, join code *": [
+    "נוצר $1, קוד הצטרפות $2",
+    "تم إنشاء $1، رمز الانضمام $2",
+  ],
+  "Copied *": ["הועתק $1", "تم النسخ $1"],
+  Copied: ["הועתק", "تم النسخ"],
+  online: ["אונליין", "عن بُعد"],
+  Online: ["אונליין", "عن بُعد"],
+  "Lecture times": ["זמני הרצאה", "مواعيد المحاضرات"],
+  "(optional, as many as you need)": [
+    "(לא חובה, כמה שצריך)",
+    "(اختياري، بقدر ما تحتاج)",
+  ],
+  "+ Add a time": ["+ הוספת זמן", "+ إضافة موعد"],
+  "Add a time": ["הוספת זמן", "إضافة موعد"],
+  Day: ["יום", "اليوم"],
+  "Room, or Online": ["חדר, או Online", "قاعة، أو Online"],
+  "Remove this time": ["הסרת הזמן הזה", "إزالة هذا الموعد"],
 
   // =============================================================================
-  // A run of numbers and day or month names inside a sentence, such as "25 Nov" or "Sun
-  // 10:00". These are cut out before looking a phrase up, so one phrase covers every
-  // number.
+  // The course page on the lecturer's side.
   // =============================================================================
-  const TOKEN = new RegExp(`(?<![A-Za-z])${PIECE}(?:,? ${PIECE})*`, "g");
+  Questions: ["שאלות", "الأسئلة"],
+  "{0} planned · {1} done": [
+    "{0} מתוכננים · {1} הסתיימו",
+    "{0} مخطّط · {1} منتهٍ",
+  ],
+  "Edit course": ["עריכת הקורס", "تعديل المساق"],
+  "Edit session": ["עריכת המפגש", "تعديل اللقاء"],
+  "Delete session": ["מחיקת המפגש", "حذف اللقاء"],
+  "In class": ["בכיתה", "في الصف"],
+  "Wi-Fi": ["Wi-Fi", "واي فاي"],
+  Location: ["מיקום", "الموقع"],
+  "2nd check · button": ["בדיקה 2 · כפתור", "التحقق الثاني · زر"],
+  "2nd check · +{0} min": ["בדיקה 2 · +{0} דק'", "التحقق الثاني · +{0} د"],
+  "2nd check · {0}": ["בדיקה 2 · {0}", "التحقق الثاني · {0}"],
+  Start: ["התחלה", "ابدأ"],
+  Sheet: ["גיליון", "الكشف"],
+  Planned: ["מתוכנן", "مخطّط"],
+  "Attendance open": ["הנוכחות פתוחה", "الحضور مفتوح"],
+  Paused: ["מושהה", "متوقف مؤقتاً"],
+  Title: ["כותרת", "العنوان"],
+  Date: ["תאריך", "التاريخ"],
+  Time: ["שעה", "الوقت"],
+  Where: ["איפה", "أين"],
+  "Online (no Wi-Fi or location check)": [
+    "אונליין (בלי בדיקת Wi-Fi ומיקום)",
+    "عن بُعد (دون فحص الواي فاي والموقع)",
+  ],
+  "Check-in rules": ["כללי נוכחות", "قواعد تسجيل الحضور"],
+  "Class Wi-Fi": ["ה-Wi-Fi של הכיתה", "واي فاي الصف"],
+  "same network as your laptop": ["אותה רשת כמו המחשב שלך", "نفس شبكة حاسوبك"],
+  "within {0} m of you": ["עד {0} מ' ממך", "ضمن {0} م منك"],
+  "Second check": ["בדיקה שנייה", "التحقق الثاني"],
+  "everyone scans again later": [
+    "כולם סורקים שוב מאוחר יותר",
+    "يمسح الجميع مرة أخرى لاحقاً",
+  ],
+  "2nd check": ["בדיקה 2", "التحقق الثاني"],
+  "My button": ["הכפתור שלי", "زرّي"],
+  "After N minutes": ["אחרי N דקות", "بعد N دقائق"],
+  "At a clock time": ["בשעה מסוימת", "في ساعة محددة"],
+  Window: ["חלון זמן", "المهلة"],
+  "{0} seconds": ["{0} שניות", "{0} ثانية"],
+  "1 minute": ["דקה", "دقيقة"],
+  "{0} minutes": ["{0} דקות", "{0} دقائق"],
+  "Minutes after attendance opens": [
+    "דקות אחרי פתיחת הנוכחות",
+    "دقائق بعد فتح الحضور",
+  ],
+  At: ["ב-", "عند"],
+  "Online: students are at home, so Wi-Fi and location aren't checked. Share your screen with the code in Zoom or Meet.":
+    [
+      "אונליין: הסטודנטים בבית, אז Wi-Fi ומיקום לא נבדקים. שתפו את המסך עם הקוד ב-Zoom או Meet.",
+      "عن بُعد: الطلاب في البيت، فلا يُفحص الواي فاي والموقع. شارك شاشتك مع الرمز في Zoom أو Meet.",
+    ],
+  "Add to schedule": ["הוספה ללוח", "إضافة إلى الجدول"],
+  Lecturers: ["מרצים", "المحاضرون"],
+  "They can run lectures, see attendance and grade homework. You can remove them any time.":
+    [
+      "הם יכולים להעביר הרצאות, לראות נוכחות ולבדוק שיעורי בית. אפשר להסיר אותם בכל רגע.",
+      "يمكنهم إدارة المحاضرات ورؤية الحضور وتقييم الواجبات. يمكنك إزالتهم في أي وقت.",
+    ],
+  "Added by the course's owner.": [
+    "נוסף על ידי בעל/ת הקורס.",
+    "أضافه مالك المساق.",
+  ],
+  "The course's owner": ["בעל/ת הקורס", "مالك المساق"],
+  Owner: ["בעלים", "المالك"],
+  "Lecturer's Google email": ["מייל Google של המרצה", "بريد Google للمحاضر"],
+  "Another lecturer's Google email": [
+    "מייל Google של מרצה נוסף",
+    "بريد Google لمحاضر آخر",
+  ],
+  "Add lecturer": ["הוספת מרצה", "إضافة محاضر"],
+  Remove: ["הסרה", "إزالة"],
+  "Leave course": ["יציאה מהקורס", "مغادرة المساق"],
+  "(you)": ["(את/ה)", "(أنت)"],
+  "Leave this course?": ["לצאת מהקורס?", "مغادرة هذا المساق؟"],
+  "You won't see this course any more, unless the owner adds you again.": [
+    "לא תראו יותר את הקורס, אלא אם בעל/ת הקורס יוסיף אתכם שוב.",
+    "لن ترى هذا المساق بعد الآن، إلا إذا أضافك المالك مجدداً.",
+  ],
+  "Remove *?": ["להסיר את $1?", "إزالة $1؟"],
+  "They lose access to this course right away. You can add them again later.": [
+    "הגישה שלהם לקורס נעלמת מיד. אפשר להוסיף אותם שוב אחר כך.",
+    "يفقدون الوصول إلى المساق فوراً. يمكنك إضافتهم لاحقاً.",
+  ],
+  Removed: ["הוסר", "تمت الإزالة"],
+  "Added. They sign in as a lecturer with that Google account to see the course.":
+    [
+      "נוסף. הם מתחברים כמרצה עם חשבון ה-Google הזה כדי לראות את הקורס.",
+      "تمت الإضافة. يسجّلون الدخول كمحاضر بحساب Google هذا لرؤية المساق.",
+    ],
+  "Deleting a course removes its sessions, attendance and summaries.": [
+    "מחיקת קורס מוחקת את המפגשים, הנוכחות והסיכומים שלו.",
+    "حذف المساق يحذف لقاءاته وحضوره وملخصاته.",
+  ],
+  "Delete course": ["מחיקת הקורס", "حذف المساق"],
+  "Sessions so far": ["המפגשים עד כה", "اللقاءات حتى الآن"],
+  "so far": ["עד כה", "حتى الآن"],
+  "Plan a session": ["תכנון מפגש", "خطّط لقاءً"],
+  "Plan a": ["תכנון", "خطّط"],
+  session: ["מפגש", "لقاءً"],
+  "e.g. Week 5: UML": ["למשל: שבוע 5: UML", "مثلاً: الأسبوع 5: UML"],
+  Save: ["שמירה", "حفظ"],
+  "Course saved": ["הקורס נשמר", "تم حفظ المساق"],
+  "Session saved": ["המפגש נשמר", "تم حفظ اللقاء"],
+  "Session added": ["המפגש נוסף", "تمت إضافة اللقاء"],
+  "Session deleted": ["המפגש נמחק", "تم حذف اللقاء"],
+  "Course deleted": ["הקורס נמחק", "تم حذف المساق"],
+  "No sessions yet. Plan one, or press Start lecture.": [
+    "עוד אין מפגשים. תכננו אחד, או לחצו על התחלת הרצאה.",
+    "لا لقاءات بعد. خطّط واحداً أو اضغط بدء المحاضرة.",
+  ],
+  "No time chosen for the second check. It will wait for your button.": [
+    "לא נבחרה שעה לבדיקה השנייה. היא תחכה לכפתור שלך.",
+    "لم يُختر وقت للتحقق الثاني. سينتظر زرّك.",
+  ],
+  "Delete *?": ["למחוק את $1?", "حذف $1؟"],
+  "This deletes the course with all its students, sessions, attendance, polls, summaries and homework. It can't be undone.":
+    [
+      "זה מוחק את הקורס עם כל הסטודנטים, המפגשים, הנוכחות, הסקרים, הסיכומים ושיעורי הבית. אי אפשר לבטל.",
+      "سيُحذف المساق بكل طلابه ولقاءاته وحضوره وتصويتاته وملخصاته وواجباته. لا يمكن التراجع.",
+    ],
+  "Type the join code * to confirm": [
+    "הקלידו את קוד ההצטרפות $1 לאישור",
+    "اكتب رمز الانضمام $1 للتأكيد",
+  ],
+  "Start this session?": ["להתחיל את המפגש?", "بدء هذا اللقاء؟"],
+  '"*" is live now. Starting this one ends it.': [
+    '"$1" בשידור עכשיו. התחלת המפגש הזה תסיים אותו.',
+    '"$1" مباشر الآن. بدء هذا اللقاء سيُنهيه.',
+  ],
+  "End it and start": ["לסיים ולהתחיל", "أنهِه وابدأ"],
+  "Delete this session?": ["למחוק את המפגש?", "حذف هذا اللقاء؟"],
+  "Its attendance is deleted with it. This can't be undone.": [
+    "הנוכחות שלו נמחקת איתו. אי אפשר לבטל.",
+    "يُحذف حضوره معه. لا يمكن التراجع.",
+  ],
+  "Run the latest schema.sql in Supabase first.": [
+    "קודם הריצו את schema.sql העדכני ב-Supabase.",
+    "شغّل أحدث schema.sql في Supabase أولاً.",
+  ],
 
   // =============================================================================
-  // Translates the day and month names inside a number token.
+  // The attendance sheet.
   // =============================================================================
-  const localToken = (t) =>
-    t.replace(new RegExp(`\\b(${NAMES})\\b`, "g"), (w) => WORD.get(w) || w);
+  "QR frames log": ["יומן פריימים", "سجل الإطارات"],
+  Export: ["ייצוא", "تصدير"],
+  "Download attendance": ["הורדת נוכחות", "تنزيل الحضور"],
+  "One lecture, or every lecture of the course in one sheet.": [
+    "הרצאה אחת, או כל ההרצאות של הקורס בגיליון אחד.",
+    "محاضرة واحدة، أو كل محاضرات المساق في ورقة واحدة.",
+  ],
+  File: ["קובץ", "الملف"],
+  Excel: ["Excel", "Excel"],
+  CSV: ["CSV", "CSV"],
+  "Every frame the projector showed, in order, with the exact time.": [
+    "כל פריים שהמקרן הציג, לפי הסדר, עם השעה המדויקת.",
+    "كل إطار عرضه جهاز العرض بالترتيب مع الوقت الدقيق.",
+  ],
+  Session: ["מפגש", "اللقاء"],
+  "All sessions": ["כל המפגשים", "كل اللقاءات"],
+  "second check not yet": ["בדיקה שנייה עוד לא", "التحقق الثاني ليس بعد"],
+  "one of two": ["אחת משתיים", "واحد من اثنين"],
+  "of {0}": ["מתוך {0}", "من {0}"],
+  Blocked: ["נחסם", "محظور"],
+  "lecture still open": ["ההרצאה עדיין פתוחה", "المحاضرة ما زالت مفتوحة"],
+  "{0} requests to be marked present": [
+    "{0} בקשות לסימון נוכחות",
+    "{0} طلبات لتسجيل الحضور",
+  ],
+  "1 request to be marked present": [
+    "בקשה אחת לסימון נוכחות",
+    "طلب واحد لتسجيل الحضور",
+  ],
+  "Students who couldn't check in. Marking someone present counts both checks for that lecture.":
+    [
+      "סטודנטים שלא הצליחו להירשם. סימון נוכחות נחשב כשתי הבדיקות באותה הרצאה.",
+      "طلاب لم يستطيعوا تسجيل الحضور. تسجيل أحدهم حاضراً يُحسب للتحققين في تلك المحاضرة.",
+    ],
+  lecture: ["הרצאה", "محاضرة"],
+  "*, asked *, *": ["$1, ביקש $2, $3", "$1، طلب $2، $3"],
+  Decline: ["דחייה", "رفض"],
+  "Mark present": ["סימון נוכח", "تسجيل حاضر"],
+  "{0} decided": ["{0} הוחלטו", "{0} تم البت فيها"],
+  "Marked present": ["סומן נוכח", "سُجّل حاضراً"],
+  Declined: ["נדחה", "مرفوض"],
+  "Search students": ["חיפוש סטודנטים", "البحث عن طلاب"],
+  Everyone: ["כולם", "الجميع"],
+  "Absent in the chosen lecture": [
+    "נעדרו בהרצאה שנבחרה",
+    "غائبون في المحاضرة المختارة",
+  ],
+  "Partial in the chosen lecture": [
+    "חלקי בהרצאה שנבחרה",
+    "جزئي في المحاضرة المختارة",
+  ],
+  "Partial counts as": ["חלקי נחשב", "الجزئي يُحسب"],
+  Half: ["חצי", "نصف"],
+  Total: ['סה"כ', "المجموع"],
+  "* · group {0}": ["$1 · קבוצה {0}", "$1 · مجموعة {0}"],
+  ", group {0}": [", קבוצה {0}", "، مجموعة {0}"],
+  "group {0}": ["קבוצה {0}", "مجموعة {0}"],
+  "Lecture {0} · {1}": ["הרצאה {0} · {1}", "المحاضرة {0} · {1}"],
+  "Check {0}": ["בדיקה {0}", "التحقق {0}"],
+  "at {0}": ["ב-{0}", "الساعة {0}"],
+  "✓ Fresh code ({0} s old, {1} frames)": [
+    "✓ קוד טרי (בן {0} שנ', {1} פריימים)",
+    "✓ رمز حديث (عمره {0} ث، {1} إطارات)",
+  ],
+  "Internet {0} ms": ["אינטרנט {0} ms", "الإنترنت {0} ms"],
+  "{0} m from lecturer": ["{0} מ' מהמרצה", "{0} م من المحاضر"],
+  "{0} frames scanned": ["{0} פריימים נסרקו", "{0} إطارات ممسوحة"],
+  Frame: ["פריים", "الإطار"],
+  "Shown at": ["הוצג ב-", "عُرض الساعة"],
+  "Sent to the server at {0}": [
+    "נשלח לשרת ב-{0}",
+    "أُرسل إلى الخادم الساعة {0}",
+  ],
+  "not yet": ["עוד לא", "ليس بعد"],
+  Override: ["שינוי ידני", "تعديل يدوي"],
+  'Set automatically by the session\'s check-in rules. A status you set by hand is marked "Set by hand".':
+    [
+      'נקבע אוטומטית לפי כללי הנוכחות של המפגש. סטטוס שקבעת ידנית מסומן "נקבע ידנית".',
+      'حُدّد تلقائياً حسب قواعد الحضور. الحالة التي تحددها يدوياً تُعلَّم "يدوياً".',
+    ],
+  "set by hand": ["נקבע ידנית", "يدوياً"],
+  "Set status by hand": ["קביעת סטטוס ידנית", "تحديد الحالة يدوياً"],
+  "Who was there?": ["מי היה?", "من حضر؟"],
+  "File type": ["סוג קובץ", "نوع الملف"],
+  Summary: ["סיכום", "الملخص"],
+  "Attendance grid": ["טבלת נוכחות", "جدول الحضور"],
+  "Search name or email": ["חיפוש שם או מייל", "ابحث بالاسم أو البريد"],
+  "Delete L{0}": ["מחיקת L{0}", "حذف L{0}"],
+  Open: ["פתיחה", "فتح"],
+  "Present in L{0}": ["נוכח ב-L{0}", "حاضر في L{0}"],
+  "Absent in L{0}": ["נעדר ב-L{0}", "غائب في L{0}"],
+  "Partial in L{0}": ["חלקי ב-L{0}", "جزئي في L{0}"],
+  "Partial needs a second check": [
+    "חלקי דורש בדיקה שנייה",
+    "الجزئي يحتاج تحققاً ثانياً",
+  ],
+  "after it ended": ["אחרי שהסתיימה", "بعد انتهائها"],
+  "Delete this lecture?": ["למחוק את ההרצאה?", "حذف هذه المحاضرة؟"],
+  "All its check-ins are deleted with it. This can't be undone.": [
+    "כל הנוכחויות שלה נמחקות איתה. אי אפשר לבטל.",
+    "تُحذف كل تسجيلات الحضور معها. لا يمكن التراجع.",
+  ],
+  "Delete lecture": ["מחיקת ההרצאה", "حذف المحاضرة"],
+  "Excel couldn't load, so a CSV file was downloaded instead.": [
+    "Excel לא נטען, אז הורד קובץ CSV במקום.",
+    "تعذّر تحميل Excel، فتم تنزيل ملف CSV بدلاً منه.",
+  ],
+  "{0} frames in total": ["{0} פריימים בסך הכל", "{0} إطاراً إجمالاً"],
+  "{0} frames downloaded": ["{0} פריימים הורדו", "تم تنزيل {0} إطاراً"],
 
   // =============================================================================
-  // Puts the numbers and names back into the translated phrase.
+  // The live room (projector).
   // =============================================================================
-  const fill = (val, toks, caps) =>
-    val
-      .replace(/\{(\d+)\}/g, (m, i) =>
-        toks[i] != null ? localToken(toks[i]) : m,
-      )
-      .replace(/\$(\d)/g, (m, i) => caps[i - 1] ?? m);
+  "Check-in": ["נוכחות", "الحضور"],
+  Board: ["לוח", "السبورة"],
+  Pause: ["השהיה", "إيقاف مؤقت"],
+  Resume: ["המשך", "استئناف"],
+  "Stop attendance": ["עצירת הנוכחות", "إيقاف الحضور"],
+  "Open attendance": ["פתיחת נוכחות", "فتح الحضور"],
+  "Open attendance again": ["פתיחת הנוכחות מחדש", "فتح الحضور مجدداً"],
+  "End session": ["סיום המפגש", "إنهاء اللقاء"],
+  "New poll": ["סקר חדש", "تصويت جديد"],
+  Question: ["שאלה", "السؤال"],
+  "Time limit": ["הגבלת זמן", "المدة"],
+  "{0} min": ["{0} דק'", "{0} د"],
+  "No limit": ["בלי הגבלה", "بلا حد"],
+  "Show results only after it closes": [
+    "להציג תוצאות רק אחרי הסגירה",
+    "عرض النتائج بعد الإغلاق فقط",
+  ],
+  "Start poll": ["התחלת סקר", "بدء التصويت"],
+  "Live poll, {0} left, {1} answers": [
+    "סקר חי, נשארו {0}, {1} תשובות",
+    "تصويت مباشر، متبقٍ {0}، {1} إجابات",
+  ],
+  "Close poll": ["סגירת הסקר", "إغلاق التصويت"],
+  "Slides for this lecture": ["מצגת להרצאה הזו", "شرائح هذه المحاضرة"],
+  "Drop your slides": ["גררו לכאן", "أسقط شرائحك"],
+  "here.": ["את המצגת.", "هنا."],
+  "PDF works best: you can draw on it and students follow your slide. PowerPoint, Word and Excel files and pictures work too.":
+    [
+      "PDF עובד הכי טוב: אפשר לצייר עליו והסטודנטים עוקבים אחרי השקף שלך. גם PowerPoint, Word, Excel ותמונות עובדים.",
+      "PDF هو الأفضل: يمكنك الرسم عليه ويتابع الطلاب شريحتك. ملفات PowerPoint وWord وExcel والصور تعمل أيضاً.",
+    ],
+  Replace: ["החלפה", "استبدال"],
+  Whiteboard: ["לוח", "السبورة"],
+  "+ New page": ["+ דף חדש", "+ صفحة جديدة"],
+  "New page": ["דף חדש", "صفحة جديدة"],
+  "End this lecture?": ["לסיים את ההרצאה?", "إنهاء هذه المحاضرة؟"],
+  "Check-in closes for good and you go to the attendance sheet.": [
+    "הנוכחות נסגרת סופית ועוברים לגיליון הנוכחות.",
+    "يُغلق الحضور نهائياً وتنتقل إلى كشف الحضور.",
+  ],
+  "Download with my drawings": ["הורדה עם הציורים שלי", "تنزيل مع رسوماتي"],
+  "Share with the students (they can download it)": [
+    "שיתוף עם הסטודנטים (הם יוכלו להוריד)",
+    "مشاركة مع الطلاب (يمكنهم تنزيلها)",
+  ],
+  "Download as PDF": ["הורדה כ-PDF", "تنزيل PDF"],
+  "Share with the students": ["שיתוף עם הסטודנטים", "مشاركة مع الطلاب"],
+  "End lecture": ["סיום ההרצאה", "إنهاء المحاضرة"],
+  "Questions from the class": ["שאלות מהכיתה", "أسئلة الصف"],
+  "Open the course on your phone,": [
+    "פתחו את הקורס בטלפון,",
+    "افتح المساق على هاتفك،",
+  ],
+  tap: ["הקישו", "اضغط"],
+  "Check in.": ["נוכחות.", "تسجيل الحضور."],
+  "· refreshes 5× a second": [
+    "· מתרענן 5 פעמים בשנייה",
+    "· يتجدد 5 مرات في الثانية",
+  ],
+  "Checked in": ["נרשמו", "سجّلوا"],
+  "Second check in": ["בדיקה שנייה בעוד", "التحقق الثاني بعد"],
+  "Starts by itself at {0} (keep this page open). Students get {1}.": [
+    "מתחילה לבד ב-{0} (השאירו את הדף פתוח). לסטודנטים יש {1}.",
+    "يبدأ تلقائياً الساعة {0} (أبقِ الصفحة مفتوحة). لدى الطلاب {1}.",
+  ],
+  Starts: ["מתחילה", "يبدأ"],
+  "With a button": ["בכפתור", "بزر"],
+  "In … minutes": ["בעוד … דקות", "بعد … دقائق"],
+  "At a time": ["בשעה", "في ساعة"],
+  "minutes from now": ["דקות מעכשיו", "دقائق من الآن"],
+  today: ["היום", "اليوم"],
+  "Students have": ["לסטודנטים יש", "لدى الطلاب"],
+  "Start second check": ["התחלת בדיקה שנייה", "بدء التحقق الثاني"],
+  "Start now": ["התחלה עכשיו", "ابدأ الآن"],
+  "Cancel the plan": ["ביטול התכנון", "إلغاء الخطة"],
+  "{0} asked to be marked present": [
+    "{0} ביקשו סימון נוכחות",
+    "{0} طلبوا تسجيل حضورهم",
+  ],
+  "Just arrived": ["הגיעו עכשיו", "وصلوا للتو"],
+  "Nobody yet, the room is warming up.": [
+    "עוד אף אחד, הכיתה מתחממת.",
+    "لا أحد بعد، الصف يستعدّ.",
+  ],
+  "Projector view": ["תצוגת מקרן", "عرض جهاز العرض"],
+  "Back to the course": ["חזרה לקורס", "العودة إلى المساق"],
+  "Back to the courses": ["חזרה לקורסים", "العودة إلى المساقات"],
+  "No lecture": ["אין הרצאה", "لا محاضرة"],
+  "is live.": ["בשידור.", "مباشرة."],
+  "Open a course and press Start lecture. This room fills up the moment you do.":
+    [
+      "פתחו קורס ולחצו על התחלת הרצאה. החדר מתמלא ברגע שתעשו את זה.",
+      "افتح مساقاً واضغط بدء المحاضرة. تمتلئ هذه الغرفة لحظة تفعل ذلك.",
+    ],
+  "Question, e.g. Which diagram shows the order of calls?": [
+    "שאלה, למשל: איזו דיאגרמה מראה את סדר הקריאות?",
+    "السؤال، مثلاً: أي مخطط يبيّن ترتيب الاستدعاءات؟",
+  ],
+  "Answer A": ["תשובה A", "الإجابة A"],
+  "Answer B": ["תשובה B", "الإجابة B"],
+  "Answer C (optional)": ["תשובה C (לא חובה)", "الإجابة C (اختياري)"],
+  "Answer C": ["תשובה C", "الإجابة C"],
+  "Answer D (optional)": ["תשובה D (לא חובה)", "الإجابة D (اختياري)"],
+  "Answer D": ["תשובה D", "الإجابة D"],
+  "Point (no drawing)": ["הצבעה (בלי ציור)", "مؤشر (دون رسم)"],
+  Pen: ["עט", "قلم"],
+  Highlighter: ["מרקר", "قلم تمييز"],
+  Eraser: ["מחק", "ممحاة"],
+  "Text (type with the keyboard)": [
+    "טקסט (הקלדה במקלדת)",
+    "نص (اكتب بلوحة المفاتيح)",
+  ],
+  "Colour {0}": ["צבע {0}", "اللون {0}"],
+  Thin: ["דק", "رفيع"],
+  Medium: ["בינוני", "متوسط"],
+  Thick: ["עבה", "سميك"],
+  Undo: ["ביטול פעולה", "تراجع"],
+  "Undo (Ctrl+Z)": ["ביטול פעולה (Ctrl+Z)", "تراجع (Ctrl+Z)"],
+  "Clear this page": ["ניקוי הדף", "مسح هذه الصفحة"],
+  Presentation: ["מצגת", "العرض"],
+  "Previous page": ["הדף הקודם", "الصفحة السابقة"],
+  "Next page": ["הדף הבא", "الصفحة التالية"],
+  "Animated attendance code, changes several times per second": [
+    "קוד נוכחות מונפש, משתנה כמה פעמים בשנייה",
+    "رمز حضور متحرك، يتغير عدة مرات في الثانية",
+  ],
+  "When the second check starts": [
+    "מתי הבדיקה השנייה מתחילה",
+    "متى يبدأ التحقق الثاني",
+  ],
+  "Minutes from now": ["דקות מעכשיו", "دقائق من الآن"],
+  "Start time": ["שעת התחלה", "وقت البدء"],
+  "How long students have to scan": [
+    "כמה זמן יש לסטודנטים לסרוק",
+    "كم من الوقت لدى الطلاب للمسح",
+  ],
+  "{0} open, {1} answered": ["{0} פתוחות, {1} נענו", "{0} مفتوحة، {1} مُجابة"],
+  "Answered ✓": ["נענתה ✓", "تمت الإجابة ✓"],
+  Hide: ["הסתרה", "إخفاء"],
+  Reopen: ["פתיחה מחדש", "إعادة فتح"],
+  "Online session": ["מפגש אונליין", "لقاء عن بُعد"],
+  "Code only": ["קוד בלבד", "الرمز فقط"],
+  "Checking *.": ["בודקים $1.", "نفحص $1."],
+  "Class network saved": ["רשת הכיתה נשמרה", "تم حفظ شبكة الصف"],
+  "Location saved": ["המיקום נשמר", "تم حفظ الموقع"],
+  "Second check —": ["בדיקה שנייה:", "التحقق الثاني:"],
+  "scan again now.": ["סרקו שוב עכשיו.", "امسحوا مجدداً الآن."],
+  "{0} of {1} passed the second check": [
+    "{0} מתוך {1} עברו את הבדיקה השנייה",
+    "{0} من {1} اجتازوا التحقق الثاني",
+  ],
+  "{0} seconds left, {1} of {2} scanned": [
+    "נשארו {0} שניות, {1} מתוך {2} סרקו",
+    "متبقٍ {0} ثانية، {1} من {2} مسحوا",
+  ],
+  "It disappears from the screen and from students' phones.": [
+    "היא נעלמת מהמסך ומהטלפונים של הסטודנטים.",
+    "يختفي من الشاشة ومن هواتف الطلاب.",
+  ],
+  "Start the second check?": ["להתחיל את הבדיקה השנייה?", "بدء التحقق الثاني؟"],
+  "Start the second check now?": [
+    "להתחיל את הבדיקה השנייה עכשיו?",
+    "بدء التحقق الثاني الآن؟",
+  ],
+  "Instead of waiting for the planned time.": [
+    "במקום לחכות לשעה המתוכננת.",
+    "بدلاً من انتظار الوقت المخطط.",
+  ],
+  "● On students' phones": ["● בטלפונים של הסטודנטים", "● على هواتف الطلاب"],
+  "Remove the slides?": ["להסיר את המצגת?", "إزالة الشرائح؟"],
+  "They disappear from the students' phones too, and your drawings on them are deleted.":
+    [
+      "היא נעלמת גם מהטלפונים של הסטודנטים, והציורים שלך עליה נמחקים.",
+      "تختفي من هواتف الطلاب أيضاً، وتُحذف رسوماتك عليها.",
+    ],
+  "Remove slides": ["הסרת המצגת", "إزالة الشرائح"],
+  "No slides are open": ["אין מצגת פתוחה", "لا شرائح مفتوحة"],
+  "Working…": ["עובדים על זה…", "جارٍ العمل…"],
+  "Preparing the slides…": ["מכינים את המצגת…", "نجهّز الشرائح…"],
+  "Sharing the slides with the class…": [
+    "משתפים את המצגת עם הכיתה…",
+    "نشارك الشرائح مع الصف…",
+  ],
+  "Preparing the whiteboard…": ["מכינים את הלוח…", "نجهّز السبورة…"],
+  "Sharing the whiteboard with the class…": [
+    "משתפים את הלוח עם הכיתה…",
+    "نشارك السبورة مع الصف…",
+  ],
+  "Saving the PDF…": ["שומרים את ה-PDF…", "نحفظ ملف PDF…"],
+  "Ending the lecture…": ["מסיימים את ההרצאה…", "ننهي المحاضرة…"],
+  "Lecture ended": ["ההרצאה הסתיימה", "انتهت المحاضرة"],
+  "Save your file:": ["שמרו את הקובץ:", "احفظ ملفك:"],
+  "Save your files:": ["שמרו את הקבצים:", "احفظ ملفاتك:"],
+  "Go to the attendance sheet": [
+    "מעבר לגיליון הנוכחות",
+    "الانتقال إلى كشف الحضور",
+  ],
+  "Couldn't save: *": ["לא נשמר: $1", "تعذّر الحفظ: $1"],
+  "Not sent: *": ["לא נשלח: $1", "لم يُرسل: $1"],
+  "Putting your drawings on the slides: {0} of {1}…": [
+    "מוסיפים את הציורים לשקפים: {0} מתוך {1}…",
+    "نضع رسوماتك على الشرائح: {0} من {1}…",
+  ],
+  "Students can see it now": [
+    "הסטודנטים יכולים לראות עכשיו",
+    "يمكن للطلاب رؤيته الآن",
+  ],
+  "Hidden from students": ["מוסתר מהסטודנטים", "مخفي عن الطلاب"],
 
   // =============================================================================
-  // Phrases already translated, so each one is worked out only once.
+  // The inbox, join requests and questions pages.
   // =============================================================================
-  const cache = new Map();
+  "Questions from every course · {0} open": [
+    "שאלות מכל הקורסים · {0} פתוחות",
+    "أسئلة من كل المساقات · {0} مفتوحة",
+  ],
+  Answer: ["תשובה", "الإجابة"],
+  "Answered in class": ["נענתה בכיתה", "أُجيب في الصف"],
+  "The inbox.": ["תיבת השאלות.", "صندوق الأسئلة."],
+  The: ["תיבת", "صندوق"],
+  "inbox.": ["השאלות.", "الأسئلة."],
+  "No questions yet. When students ask something, it lands here.": [
+    "עוד אין שאלות. כשסטודנטים ישאלו, זה יגיע לכאן.",
+    "لا أسئلة بعد. عندما يسأل الطلاب يصل السؤال إلى هنا.",
+  ],
+  "Inbox zero. Every question is answered.": [
+    "התיבה ריקה. כל השאלות נענו.",
+    "الصندوق فارغ. كل الأسئلة مُجابة.",
+  ],
+  "{0} votes": ["{0} קולות", "{0} أصوات"],
+  "{0} to join · {1} to mark present": [
+    "{0} להצטרפות · {1} לסימון נוכחות",
+    "{0} للانضمام · {1} لتسجيل الحضور",
+  ],
+  "Their Google email wasn't on the course list": [
+    "מייל ה-Google שלהם לא היה ברשימת הקורס",
+    "لم يكن بريدهم في قائمة المساق",
+  ],
+  "Let in": ["אישור", "قبول"],
+  "Students who couldn't check in": [
+    "סטודנטים שלא הצליחו להירשם",
+    "طلاب لم يستطيعوا تسجيل الحضور",
+  ],
+  Lecture: ["הרצאה", "المحاضرة"],
+  "* · asked *": ["$1 · ביקש $2", "$1 · طلب $2"],
+  "Waiting on you.": ["מחכים לך.", "بانتظارك."],
+  "Mark me present": ["סמנו אותי נוכח", "سجّلني حاضراً"],
+  "Decline this request?": ["לדחות את הבקשה?", "رفض هذا الطلب؟"],
+  "* won't be added to the course. They can ask again with the code.": [
+    "$1 לא יתווסף לקורס. אפשר לבקש שוב עם הקוד.",
+    "لن يُضاف $1 إلى المساق. يمكنه الطلب مجدداً بالرمز.",
+  ],
+  "Nothing waiting.": ["אין בקשות ממתינות.", "لا طلبات بانتظارك."],
+  "Students send these from the course page, during a lecture or any time after it.":
+    [
+      "סטודנטים שולחים את אלה מדף הקורס, במהלך ההרצאה או בכל זמן אחריה.",
+      "يرسل الطلاب هذه من صفحة المساق، أثناء المحاضرة أو في أي وقت بعدها.",
+    ],
+  "Mark answered": ["סימון כנענתה", "تعليم كمُجاب"],
+  "Questions and comments": ["שאלות והערות", "أسئلة وتعليقات"],
+  "Votes from students": ["הצבעות של סטודנטים", "أصوات الطلاب"],
+  "Hide this message?": ["להסתיר את ההודעה?", "إخفاء هذه الرسالة؟"],
+  "Nobody will see it any more, students included. This can't be undone.": [
+    "אף אחד לא יראה אותה יותר, כולל הסטודנטים. אי אפשר לבטל.",
+    "لن يراها أحد بعد الآن، بمن فيهم الطلاب. لا يمكن التراجع.",
+  ],
+  "Hide message": ["הסתרת ההודעה", "إخفاء الرسالة"],
 
   // =============================================================================
-  // Finds the translation of one piece of text: an exact phrase, a phrase with numbers,
-  // a phrase with a "*", or a sentence made of known parts. Returns the text unchanged
-  // if nothing fits.
+  // The student list (roster).
   // =============================================================================
-  function core(t, depth = 0) {
-    if (EXACT.has(t)) return EXACT.get(t);
-    const sym = t.match(/^([●✓≈+·•‹›←→✕×★⟳\s]+)(\S.*)$/u);
-    if (sym) {
-      const r = core(sym[2], depth + 1);
-      if (r != null) return sym[1] + r;
-    }
-    const toks = [];
-    const norm = t.replace(TOKEN, (x) => {
-      toks.push(x);
-      return `{${toks.length - 1}}`;
-    });
-    if (toks.length && norm !== t && EXACT.has(norm))
-      return fill(EXACT.get(norm), toks, []);
-    for (const [re, val] of WILD) {
-      const m = norm.match(re);
-      if (!m) continue;
-      return fill(
-        val,
-        toks,
-        m.slice(1).map((c) => {
-          const raw = c.replace(/\{(\d+)\}/g, (x, i) => toks[i] ?? x);
-          return depth < 3
-            ? (core(raw, depth + 1) ?? localToken(raw))
-            : localToken(raw);
-        }),
-      );
-    }
-    if (toks.length && /^[\s{}\d,·:+\-–]*$/.test(norm))
-      return fill(norm, toks, []);
-    const p = t.match(/^(.*?[^.:!?…])([.:!?…]+)$/);
-    if (p && EXACT.has(p[1])) return EXACT.get(p[1]) + p[2];
-    if (depth < 3)
-      for (const sep of [" · ", ", ", " / "]) {
-        if (!t.includes(sep)) continue;
-        const parts = t.split(sep),
-          out = parts.map((x) => core(x, depth + 1));
-        if (out.some((x) => x != null))
-          return out.map((x, i) => x ?? parts[i]).join(sep);
-      }
-    return null;
-  }
+  "Import from CSV": ["ייבוא מ-CSV", "استيراد من CSV"],
+  "Upload the student list (for example the Moodle participants export). First name, last name, email and group are read; other columns are ignored.":
+    [
+      "העלו את רשימת הסטודנטים (למשל ייצוא המשתתפים מ-Moodle). נקראים שם פרטי, שם משפחה, מייל וקבוצה; שאר העמודות לא נלקחות.",
+      "ارفع قائمة الطلاب (مثلاً تصدير المشاركين من Moodle). تُقرأ الأسماء والبريد والمجموعة؛ وتُتجاهل باقي الأعمدة.",
+    ],
+  "Drop a .csv file here": ["גררו לכאן קובץ ‎.csv", "أسقط ملف ‎.csv هنا"],
+  "or click to choose one": ["או לחצו לבחירה", "أو اضغط للاختيار"],
+  "Choose file": ["בחירת קובץ", "اختر ملفاً"],
+  "Preview (first {0})": ["תצוגה מקדימה ({0} ראשונים)", "معاينة (أول {0})"],
+  Line: ["שורה", "السطر"],
+  "First name": ["שם פרטי", "الاسم الأول"],
+  "Last name": ["שם משפחה", "اسم العائلة"],
+  Email: ["מייל", "البريد"],
+  Group: ["קבוצה", "المجموعة"],
+  "Add a student": ["הוספת סטודנט", "إضافة طالب"],
+  "For late registrations.": ["להרשמות מאוחרות.", "للتسجيلات المتأخرة."],
+  "Add student": ["הוספת סטודנט", "إضافة الطالب"],
+  "Students can also join with the code. If their email is not on this list, you get a request to approve.":
+    [
+      "סטודנטים יכולים להצטרף גם עם הקוד. אם המייל שלהם לא ברשימה, תקבלו בקשה לאישור.",
+      "يمكن للطلاب الانضمام بالرمز أيضاً. إن لم يكن بريدهم في القائمة تصلك طلبات للموافقة.",
+    ],
+  "Course list": ["רשימת הקורס", "قائمة المساق"],
+  "{0} on the list, {1} joined, {2} request": [
+    "{0} ברשימה, {1} הצטרפו, {2} בקשה",
+    "{0} في القائمة، {1} انضموا، {2} طلب",
+  ],
+  "{0} on the list, {1} joined, {2} requests": [
+    "{0} ברשימה, {1} הצטרפו, {2} בקשות",
+    "{0} في القائمة، {1} انضموا، {2} طلبات",
+  ],
+  "{0} on the list, {1} joined": [
+    "{0} ברשימה, {1} הצטרפו",
+    "{0} في القائمة، {1} انضموا",
+  ],
+  Status: ["סטטוס", "الحالة"],
+  Actions: ["פעולות", "إجراءات"],
+  "Wants to join": ["רוצה להצטרף", "يريد الانضمام"],
+  Approve: ["אישור", "موافقة"],
+  "Joined the app": ["הצטרף לאפליקציה", "انضم إلى التطبيق"],
+  "On the list": ["ברשימה", "في القائمة"],
+  "Search name, email or group": [
+    "חיפוש שם, מייל או קבוצה",
+    "ابحث بالاسم أو البريد أو المجموعة",
+  ],
+  "Group of *": ["הקבוצה של $1", "مجموعة $1"],
+  "Remove *": ["הסרת $1", "إزالة $1"],
+  "Remove this student?": ["להסיר את הסטודנט?", "إزالة هذا الطالب؟"],
+  "* is taken off this course and its attendance sheet.": [
+    "$1 יוסר מהקורס ומגיליון הנוכחות.",
+    "سيُزال $1 من المساق وكشف الحضور.",
+  ],
+  "Remove student": ["הסרת הסטודנט", "إزالة الطالب"],
+  "{0} rows, {1} columns": ["{0} שורות, {1} עמודות", "{0} صفوف، {1} أعمدة"],
+  "Import {0} students": ["ייבוא {0} סטודנטים", "استيراد {0} طالب"],
+  "First name is missing": ["חסר שם פרטי", "الاسم الأول ناقص"],
+  "Name is missing": ["חסר שם", "الاسم ناقص"],
+  "Email looks wrong": ["המייל נראה שגוי", "البريد يبدو خاطئاً"],
+  "Already on the list": ["כבר ברשימה", "موجود في القائمة"],
 
   // =============================================================================
-  // Translates one piece of text, keeping the spaces around it.
+  // Lecture summaries.
   // =============================================================================
-  function t(text) {
-    if (!on || text == null) return text;
-    const s = String(text);
-    if (!/[A-Za-z]/.test(s)) return s;
-    if (cache.has(s)) return cache.get(s);
-    const trimmed = s.replace(/\s+/g, " ").trim();
-    const r = trimmed ? core(trimmed) : null;
-    const out = r == null ? s : s.match(/^\s*/)[0] + r + s.match(/\s*$/)[0];
-    if (cache.size > 5000) cache.clear();
-    cache.set(s, out);
-    return out;
-  }
+  "AI ready": ["ה-AI מוכן", "الذكاء الاصطناعي جاهز"],
+  "Add a key and choose a model": [
+    "הוסיפו מפתח ובחרו מודל",
+    "أضف مفتاحاً واختر نموذجاً",
+  ],
+  "Add a Gemini API key in AI settings.": [
+    "הוסיפו מפתח Gemini API בהגדרות ה-AI.",
+    "أضف مفتاح Gemini API في إعدادات الذكاء الاصطناعي.",
+  ],
+  "Set up AI": ["הגדרת AI", "إعداد الذكاء الاصطناعي"],
+  "Summarize a recording": ["סיכום הקלטה", "تلخيص تسجيل"],
+  "Link (Zoom / Drive / YouTube)": [
+    "קישור (Zoom / Drive / YouTube)",
+    "رابط (Zoom / Drive / YouTube)",
+  ],
+  "Upload a recording": ["העלאת הקלטה", "رفع تسجيل"],
+  "Transcript (text)": ["תמלול (טקסט)", "نص مكتوب"],
+  "Recording link": ["קישור להקלטה", "رابط التسجيل"],
+  "Zoom:": ["Zoom:", "Zoom:"],
+  "paste the recording's share link. It has to open without signing in and without a passcode. If Zoom made a transcript, that is used (about a minute); if not, the video is copied over (a few minutes for a long lecture).":
+    [
+      "הדביקו את קישור השיתוף של ההקלטה. הוא צריך להיפתח בלי התחברות ובלי סיסמה. אם Zoom יצר תמלול, משתמשים בו (בערך דקה); אם לא, הווידאו מועתק (כמה דקות להרצאה ארוכה).",
+      "الصق رابط مشاركة التسجيل. يجب أن يفتح دون تسجيل دخول ودون رمز مرور. إن صنع Zoom نصاً مكتوباً يُستخدم (نحو دقيقة)؛ وإلا يُنسخ الفيديو (بضع دقائق لمحاضرة طويلة).",
+    ],
+  'Share → General access → "Anyone with the link".': [
+    'שיתוף ← גישה כללית ← "כל מי שיש לו את הקישור".',
+    'مشاركة ← الوصول العام ← "أي شخص لديه الرابط".',
+  ],
+  "public or unlisted videos.": [
+    "סרטונים ציבוריים או לא רשומים.",
+    "فيديوهات عامة أو غير مدرجة.",
+  ],
+  "Choose the lecture recording": ["בחירת הקלטת ההרצאה", "اختر تسجيل المحاضرة"],
+  "mp3, m4a, wav, mp4, webm… Download it from Zoom / Drive first.": [
+    "mp3, m4a, wav, mp4, webm… קודם הורידו אותה מ-Zoom / Drive.",
+    "mp3, m4a, wav, mp4, webm… نزّله من Zoom / Drive أولاً.",
+  ],
+  "Transcript (paste, or load a .txt / .vtt / .srt file)": [
+    "תמלול (הדביקו, או טענו קובץ ‎.txt / .vtt / .srt)",
+    "النص (الصقه أو حمّل ملف ‎.txt / .vtt / .srt)",
+  ],
+  "Load file": ["טעינת קובץ", "تحميل ملف"],
+  "Other recording": ["הקלטה אחרת", "تسجيل آخر"],
+  "Spoken language": ["שפת ההרצאה", "لغة المحاضرة"],
+  "Hebrew with English terms": [
+    "עברית עם מונחים באנגלית",
+    "العبرية مع مصطلحات إنجليزية",
+  ],
+  Hebrew: ["עברית", "العبرية"],
+  English: ["אנגלית", "الإنجليزية"],
+  "Arabic with English terms": [
+    "ערבית עם מונחים באנגלית",
+    "العربية مع مصطلحات إنجليزية",
+  ],
+  Arabic: ["ערבית", "العربية"],
+  "Summary language": ["שפת הסיכום", "لغة الملخص"],
+  "Start summary": ["התחלת סיכום", "بدء التلخيص"],
+  Shared: ["משותף", "مُشارَك"],
+  Ready: ["מוכן", "جاهز"],
+  Failed: ["נכשל", "فشل"],
+  "Shared from lectures": ["שותף מההרצאות", "مُشارَك من المحاضرات"],
+  "Pick a summary on the left, or make a new one.": [
+    "בחרו סיכום ברשימה, או צרו חדש.",
+    "اختر ملخصاً من القائمة أو أنشئ واحداً جديداً.",
+  ],
+  "Lecture summaries": ["סיכומי הרצאות", "ملخصات المحاضرات"],
+  Lecture: ["הרצאה", "المحاضرة"],
+  Source: ["מקור", "المصدر"],
+  "Paste the Zoom / Meet transcript here": [
+    "הדביקו כאן את התמלול מ-Zoom / Meet",
+    "الصق نص Zoom / Meet هنا",
+  ],
+  "Delete summary": ["מחיקת הסיכום", "حذف الملخص"],
+  "Copy text": ["העתקת טקסט", "نسخ النص"],
+  "Share with students": ["שיתוף עם הסטודנטים", "مشاركة مع الطلاب"],
+  "Hide from students": ["הסתרה מהסטודנטים", "إخفاء عن الطلاب"],
+  "*, summary in *": ["$1, סיכום ב$2", "$1، ملخص بـ$2"],
+  "The summary failed": ["הסיכום נכשל", "فشل التلخيص"],
+  Delete: ["מחיקה", "حذف"],
+  "Delete this summary?": ["למחוק את הסיכום?", "حذف هذا الملخص؟"],
+  "Students won't see it any more. This can't be undone.": [
+    "הסטודנטים לא יראו אותו יותר. אי אפשר לבטל.",
+    "لن يراه الطلاب بعد الآن. لا يمكن التراجع.",
+  ],
+  "Stop sharing this?": ["להפסיק לשתף?", "إيقاف المشاركة؟"],
+  '"*" is deleted and students can\'t download it any more.': [
+    '"$1" נמחק והסטודנטים לא יוכלו להוריד אותו יותר.',
+    'سيُحذف "$1" ولن يتمكن الطلاب من تنزيله.',
+  ],
+  "Summary ready": ["הסיכום מוכן", "الملخص جاهز"],
+  "Working on it. Keep this page open until it's done.": [
+    "עובדים על זה. השאירו את הדף פתוח עד הסוף.",
+    "نعمل عليه. أبقِ الصفحة مفتوحة حتى ينتهي.",
+  ],
+  Recording: ["הקלטה", "التسجيل"],
+  "Duration: {0}": ["משך: {0}", "المدة: {0}"],
+  "Quick recap": ["סיכום קצר", "خلاصة سريعة"],
+  "Next steps": ["השלבים הבאים", "الخطوات التالية"],
+  Topics: ["נושאים", "المواضيع"],
+  Terms: ["מונחים", "المصطلحات"],
+  "Review questions": ["שאלות חזרה", "أسئلة مراجعة"],
+  "{0} next steps": ["{0} שלבים הבאים", "{0} خطوات تالية"],
+  "{0} review questions": ["{0} שאלות חזרה", "{0} أسئلة مراجعة"],
+  "Stop sharing and delete": ["הפסקת שיתוף ומחיקה", "إيقاف المشاركة والحذف"],
 
   // =============================================================================
-  // Parts of the page that are never translated: code, text boxes, and anything people
-  // wrote themselves.
+  // Homework on the lecturer's side.
   // =============================================================================
-  const SKIP =
-    "script, style, textarea, code, pre, [dir=auto]:not([data-tr]), .no-tr, .ch, [contenteditable]";
-  const ATTRS = ["placeholder", "aria-label", "title"];
+  Assignment: ["מטלה", "الواجب"],
+  Due: ["הגשה", "التسليم"],
+  Average: ["ממוצע", "المعدل"],
+  "New assignment": ["מטלה חדשה", "واجب جديد"],
+  Name: ["שם", "الاسم"],
+  "The assignment (PDF)": ["המטלה (PDF)", "الواجب (PDF)"],
+  "The questions students answer. Students can open it; the AI reads it when reviewing.":
+    [
+      "השאלות שהסטודנטים עונים עליהן. הסטודנטים יכולים לפתוח אותה; ה-AI קורא אותה כשהוא בודק.",
+      "الأسئلة التي يجيب عنها الطلاب. يمكنهم فتحه؛ ويقرؤه الذكاء الاصطناعي عند التقييم.",
+    ],
+  "Due date": ["תאריך הגשה", "موعد التسليم"],
+  "Notes for students (optional, or instead of a PDF)": [
+    "הערות לסטודנטים (לא חובה, או במקום PDF)",
+    "ملاحظات للطلاب (اختياري، أو بدلاً من PDF)",
+  ],
+  "Everyone on the course list": [
+    "כל מי שברשימת הקורס",
+    "كل من في قائمة المساق",
+  ],
+  "I'll import a list (CSV / Excel) or add them": [
+    "אייבא רשימה (CSV / Excel) או אוסיף אותם",
+    "سأستورد قائمة (CSV / Excel) أو أضيفهم",
+  ],
+  "Create assignment": ["יצירת מטלה", "إنشاء الواجب"],
+  "e.g. Ex2: Teaching tool design": [
+    "למשל: תרגיל 2: עיצוב כלי הוראה",
+    "مثلاً: تمرين 2: تصميم أداة تعليمية",
+  ],
+  "Anything not in the PDF": ["כל מה שלא ב-PDF", "أي شيء ليس في PDF"],
+  "All homework": ["כל שיעורי הבית", "كل الواجبات"],
+  "Review all": ["בדיקת כולם", "تقييم الكل"],
+  "Compare students": ["השוואת סטודנטים", "مقارنة الطلاب"],
+  "Class insights": ["תובנות כיתתיות", "رؤى الصف"],
+  "Add the assignment PDF": ["הוספת PDF של המטלה", "إضافة PDF الواجب"],
+  "Due {0} · add the PDF so the AI knows the requirements": [
+    "להגשה עד {0} · הוסיפו את ה-PDF כדי שה-AI ידע מה הדרישות",
+    "التسليم {0} · أضف PDF ليعرف الذكاء الاصطناعي المتطلبات",
+  ],
+  "of {0} on the list": ["מתוך {0} ברשימה", "من {0} في القائمة"],
+  Reviewed: ["נבדקו", "تم تقييمها"],
+  "by the AI": ["על ידי ה-AI", "بالذكاء الاصطناعي"],
+  "out of {0}": ["מתוך {0}", "من {0}"],
+  "Shared-code pairs": ["זוגות עם קוד משותף", "أزواج بكود مشترك"],
+  "press Compare students": ["לחצו על השוואת סטודנטים", "اضغط مقارنة الطلاب"],
+  "Average per rubric item": ["ממוצע לכל סעיף", "المعدل لكل بند"],
+  "Common mistakes": ["טעויות נפוצות", "أخطاء شائعة"],
+  "Nothing yet": ["עוד אין", "لا شيء بعد"],
+  "Not reviewed": ["לא נבדק", "لم يُقيَّم"],
+  "Import list (CSV / Excel)": [
+    "ייבוא רשימה (CSV / Excel)",
+    "استيراد قائمة (CSV / Excel)",
+  ],
+  "Add the course list": ["הוספת רשימת הקורס", "إضافة قائمة المساق"],
+  "Link (GitHub…)": ["קישור (GitHub…)", "رابط (GitHub…)"],
+  Add: ["הוספה", "إضافة"],
+  Work: ["עבודה", "العمل"],
+  Score: ["ציון", "العلامة"],
+  Similarity: ["דמיון", "التشابه"],
+  Text: ["טקסט", "نص"],
+  Upload: ["העלאה", "رفع"],
+  "Waiting for review": ["ממתין לבדיקה", "بانتظار التقييم"],
+  "Review failed": ["הבדיקה נכשלה", "فشل التقييم"],
+  "Click a student to see their work and review.": [
+    "לחצו על סטודנט כדי לראות את העבודה והמשוב.",
+    "اضغط على طالب لرؤية عمله وتقييمه.",
+  ],
+  "Delete assignment": ["מחיקת המטלה", "حذف الواجب"],
+  optional: ["לא חובה", "اختياري"],
+  "Upload this student's work": [
+    "העלאת העבודה של הסטודנט",
+    "رفع عمل هذا الطالب",
+  ],
+  "≈ * {0}%": ["≈ $1 {0}%", "≈ $1 {0}%"],
+  "Reading…": ["קוראים…", "نقرأ…"],
+  "This PDF couldn't be read": [
+    "לא ניתן היה לקרוא את ה-PDF",
+    "تعذّرت قراءة ملف PDF",
+  ],
+  "Delete this assignment?": ["למחוק את המטלה?", "حذف هذا الواجب؟"],
+  "All handed-in files and reviews are deleted with it. This can't be undone.":
+    [
+      "כל הקבצים שהוגשו והמשובים נמחקים איתה. אי אפשר לבטל.",
+      "تُحذف كل الملفات المسلّمة والتقييمات معه. لا يمكن التراجع.",
+    ],
+  "Thinking…": ["חושבים…", "نفكر…"],
+  "Import {0} students?": ["לייבא {0} סטודנטים?", "استيراد {0} طالب؟"],
+  Import: ["ייבוא", "استيراد"],
+  "What should be printed?": ["מה להדפיס?", "ماذا تريد أن تطبع؟"],
+  Everything: ["הכל", "كل شيء"],
+  "Grades only": ["ציונים בלבד", "العلامات فقط"],
+  "Sent to your printer": ["נשלח למדפסת", "أُرسل إلى الطابعة"],
+  "Review {0} students?": ["לבדוק {0} סטודנטים?", "تقييم {0} طالب؟"],
+  "Review 1 student?": ["לבדוק סטודנט אחד?", "تقييم طالب واحد؟"],
+  "Compare {0} students?": ["להשוות {0} סטודנטים?", "مقارنة {0} طالب؟"],
+  Compare: ["השוואה", "مقارنة"],
+  Review: ["בדיקה", "تقييم"],
+  "Link to the work": ["קישור לעבודה", "رابط العمل"],
+  "A GitHub repository is read by the AI reviewer. Other links are kept for you.":
+    [
+      "מאגר GitHub נקרא על ידי ה-AI. קישורים אחרים נשמרים בשבילך.",
+      "يقرأ الذكاء الاصطناعي مستودع GitHub. الروابط الأخرى تُحفظ لك.",
+    ],
+  Link: ["קישור", "رابط"],
+  "They're taken off this assignment's list. Work they handed in stays.": [
+    "הם יוסרו מרשימת המטלה. העבודה שהגישו נשארת.",
+    "سيُزالون من قائمة هذا الواجب. يبقى العمل الذي سلّموه.",
+  ],
+  Team: ["צוות", "فريق"],
+  Alone: ["לבד", "وحده"],
+  "Shared code": ["קוד משותף", "كود مشترك"],
+  "Done ✓": ["בוצע ✓", "تم ✓"],
 
   // =============================================================================
-  // Translates one piece of text on the page.
+  // The AI settings window.
   // =============================================================================
-  function textNode(n) {
-    const el = n.parentElement;
-    if (!el || el.closest(SKIP)) return;
-    const v = n.nodeValue,
-      r = t(v);
-    if (r !== v) n.nodeValue = r;
-  }
+  "AI settings": ["הגדרות AI", "إعدادات الذكاء الاصطناعي"],
+  "AI model *": ["מודל AI $1", "نموذج الذكاء الاصطناعي $1"],
+
+  "Your shelf.": ["המדף|שלך.", "هذا|رفّك."],
+  "Your record.": ["הרישום|שלך.", "هذا|سجلّك."],
+  "My questions.": ["השאלות|שלי.", "هذه|أسئلتي."],
+  "The inbox.": ["תיבת|השאלות.", "صندوق|الأسئلة."],
+  "Waiting on you.": ["מחכים||לך.", "بانتظار||ردّك."],
+  "Ask anything.": ["שאלו|כל דבר.", "اسأل|أي شيء."],
+  "Ask without raising a hand": ["שואלים|בלי להרים יד", "اسأل|دون رفع اليد"],
+  "Check in with two scans": ["נוכחות|בשתי סריקות", "سجّل حضورك|بمسحتين"],
+  "Read every lecture's summary": [
+    "קוראים|את הסיכום של כל הרצאה",
+    "اقرأ|ملخص كل محاضرة",
+  ],
+  "Join requests": ["בקשות הצטרפות", "طلبات الانضمام"],
+  "Join your first course.": ["הצטרפו|לקורס הראשון.", "انضم|إلى أول مساق."],
+  "Mark me present": ["סמנו אותי|נוכח", "سجّلني|حاضراً"],
+  "My shelf": ["המדף|שלי", "هذا|رفّي"],
+  "No lectures yet.": ["עוד אין|הרצאות.", "لا محاضرات|بعد."],
+  "Nothing to vote on yet.": ["אין|סקר כרגע.", "لا شيء|للتصويت بعد."],
+  "Opening your shelf…": ["פותחים|את המדף שלך…", "نفتح|رفّك…"],
+  "Sessions so far": ["המפגשים|עד כה", "اللقاءات|حتى الآن"],
+  "Up next": ["מה|בהמשך", "ما|التالي"],
+  "Who's signing in?": ["מי|מתחבר?", "من|يسجّل الدخول؟"],
+  "to your class.": ["לכיתה|שלך.", "إلى|صفّك."],
+  "No lecture is live right now.": [
+    "אין הרצאה|בשידור כרגע.",
+    "لا محاضرة|مباشرة الآن.",
+  ],
+  "No lecture is live.": ["אין הרצאה|בשידור.", "لا محاضرة|مباشرة الآن."],
+  "Plan a session": ["תכנון|מפגש", "خطّط|لقاءً"],
+  "You're checked in.": ["הנוכחות|נרשמה.", "تم|تسجيل حضورك."],
+  "Checked in already.": ["כבר|נרשמת.", "سُجّل|حضورك مسبقاً."],
+  "Add a book": ["הוספת|ספר", "أضف|كتاباً"],
+  "New course": ["קורס חדש", "مساق جديد"],
+  "Second check: scan now.": [
+    "בדיקה שנייה:|סרקו עכשיו.",
+    "التحقق الثاني:|امسح الآن.",
+  ],
+  "Second check: scan again now.": [
+    "בדיקה שנייה:|סרקו שוב עכשיו.",
+    "التحقق الثاني:|امسحوا مجدداً الآن.",
+  ],
+  "Drop your slides here.": ["גררו לכאן|את המצגת.", "أسقط شرائحك|هنا."],
+  "Sign in to your class.": ["התחברות|לכיתה שלך.", "تسجيل الدخول|إلى صفّك."],
 
   // =============================================================================
-  // Translates an element's placeholder, label and title.
+  // More phrases found while checking the pages in Hebrew and Arabic.
   // =============================================================================
-  function element(el) {
-    if (el.nodeType !== 1 || el.closest(".no-tr")) return;
-    for (const a of ATTRS) {
-      const v = el.getAttribute(a);
-      if (v && /[A-Za-z]/.test(v)) {
-        const r = t(v);
-        if (r !== v) el.setAttribute(a, r);
-      }
-    }
-    if (el.tagName === "OPTION" && !el.hasAttribute("value"))
-      el.setAttribute("value", el.textContent);
-  }
+  "{0} online": ["{0} אונליין", "{0} عن بُعد"],
+  "Lecture {0}": ["הרצאה {0}", "المحاضرة {0}"],
+  "*, room *": ["$1, חדר $2", "$1، قاعة $2"],
+  "*, room {0}": ["$1, חדר {0}", "$1، قاعة {0}"],
+  "Delete L*": ["מחיקת L$1", "حذف L$1"],
+  "Present in L*": ["נוכח ב-L$1", "حاضر في L$1"],
+  "Absent in L*": ["נעדר ב-L$1", "غائب في L$1"],
+  "Partial in L*": ["חלקי ב-L$1", "جزئي في L$1"],
+  "Very similar to *": ["דומה מאוד ל-$1", "مشابه جداً لـ$1"],
+  'Set automatically by the session\'s check-in rules. A status you set by hand is marked "Set by the lecturer" in the sheet and in exports.':
+    [
+      'נקבע אוטומטית לפי כללי הנוכחות של המפגש. סטטוס שקבעת ידנית מסומן "נקבע על ידי המרצה" בגיליון ובקבצים שמורידים.',
+      'حُدّد تلقائياً حسب قواعد الحضور. الحالة التي تحددها يدوياً تُعلَّم "حدّدها المحاضر" في الكشف والملفات المصدّرة.',
+    ],
+  "Set by the lecturer": ["נקבע על ידי המרצה", "حدّدها المحاضر"],
+  "PDF works best: you can draw on it and students follow your slide.": [
+    "PDF עובד הכי טוב: אפשר לצייר עליו והסטודנטים עוקבים אחרי השקף שלך.",
+    "PDF هو الأفضل: يمكنك الرسم عليه ويتابع الطلاب شريحتك.",
+  ],
+  "PowerPoint, Word and Excel files and pictures work too.": [
+    "גם PowerPoint, Word, Excel ותמונות עובדים.",
+    "ملفات PowerPoint وWord وExcel والصور تعمل أيضاً.",
+  ],
+  "The review reads your file and your repository (it must be public). Only your work is sent, not your name or email.":
+    [
+      "הבדיקה קוראת את הקובץ ואת המאגר שלך (הוא חייב להיות ציבורי). רק העבודה נשלחת, לא השם או המייל שלך.",
+      "يقرأ التقييم ملفك ومستودعك (يجب أن يكون عاماً). يُرسل عملك فقط، لا اسمك ولا بريدك.",
+    ],
+  "Upload the student list (for example the Moodle participants export). First name, last name, email and group are matched automatically; you can change them. ID numbers are ignored.":
+    [
+      "העלו את רשימת הסטודנטים (למשל ייצוא המשתתפים מ-Moodle). שם פרטי, שם משפחה, מייל וקבוצה מזוהים אוטומטית; אפשר לשנות. מספרי תעודת זהות לא נלקחים.",
+      "ارفع قائمة الطلاب (مثلاً تصدير المشاركين من Moodle). يُطابَق الاسم الأول واسم العائلة والبريد والمجموعة تلقائياً؛ ويمكنك تغييرها. تُتجاهل أرقام الهوية.",
+    ],
+  "No rubric to fill in: the AI reads the assignment PDF, finds its requirements and grades each student against them.":
+    [
+      "אין מחוון למלא: ה-AI קורא את ה-PDF של המטלה, מוצא את הדרישות ובודק כל סטודנט מולן.",
+      "لا حاجة لسلّم تقييم: يقرأ الذكاء الاصطناعي PDF الواجب ويجد متطلباته ويقيّم كل طالب حسبها.",
+    ],
+  "The QR reader didn't load (are you online?)": [
+    "קורא ה-QR לא נטען (יש חיבור?)",
+    "لم يُحمَّل قارئ QR (هل أنت متصل؟)",
+  ],
+  "Frames from the projector window (test without camera)": [
+    "פריימים מחלון המקרן (בדיקה בלי מצלמה)",
+    "إطارات من نافذة العرض (اختبار دون كاميرا)",
+  ],
+  "https://zoom.us/rec/share/… or a Google Drive / YouTube link": [
+    "https://zoom.us/rec/share/… או קישור Google Drive / YouTube",
+    "https://zoom.us/rec/share/… أو رابط Google Drive / YouTube",
+  ],
+  "Starts by itself at {0} (keep this page open). Students get {1} minute.": [
+    "מתחילה לבד ב-{0} (השאירו את הדף פתוח). לסטודנטים יש דקה.",
+    "يبدأ تلقائياً الساعة {0} (أبقِ الصفحة مفتوحة). لدى الطلاب دقيقة.",
+  ],
+  "Starts by itself at {0} (keep this page open). Students get {1} minutes.": [
+    "מתחילה לבד ב-{0} (השאירו את הדף פתוח). לסטודנטים יש {1} דקות.",
+    "يبدأ تلقائياً الساعة {0} (أبقِ الصفحة مفتوحة). لدى الطلاب {1} دقائق.",
+  ],
+  "Starts by itself at {0} (keep this page open). Students get {1} seconds.": [
+    "מתחילה לבד ב-{0} (השאירו את הדף פתוח). לסטודנטים יש {1} שניות.",
+    "يبدأ تلقائياً الساعة {0} (أبقِ الصفحة مفتوحة). لدى الطلاب {1} ثانية.",
+  ],
+  "{0} minute": ["דקה", "دقيقة"],
+  Checking: ["בודקים", "نفحص"],
+  "PDF works best: you can draw on it and students follow your slide. PowerPoint, Word and Excel files and pictures work too. Students on the course list see it on their phones. When you end the lecture you choose whether to download it with your drawings or share it with the class.":
+    [
+      "PDF עובד הכי טוב: אפשר לצייר עליו והסטודנטים עוקבים אחרי השקף שלך. גם PowerPoint, Word, Excel ותמונות עובדים. הסטודנטים שברשימת הקורס רואים את זה בטלפון. כשמסיימים את ההרצאה בוחרים אם להוריד עם הציורים או לשתף עם הכיתה.",
+      "PDF هو الأفضل: يمكنك الرسم عليه ويتابع الطلاب شريحتك. ملفات PowerPoint وWord وExcel والصور تعمل أيضاً. يراها طلاب المساق على هواتفهم. عند إنهاء المحاضرة تختار تنزيلها مع رسوماتك أو مشاركتها مع الصف.",
+    ],
+  "* (Same computer? The projector window works too.)": [
+    "$1 (אותו מחשב? גם חלון המקרן עובד.)",
+    "$1 (نفس الحاسوب؟ نافذة العرض تعمل أيضاً.)",
+  ],
+  "Pasted text": ["טקסט מודבק", "نص ملصق"],
+  "Handed in: Pasted text, {0}": [
+    "הוגש: טקסט מודבק, {0}",
+    "سُلِّم: نص ملصق، {0}",
+  ],
+  "Network unknown": ["הרשת לא ידועה", "الشبكة غير معروفة"],
+  "Location not available. Allow it and reload.": [
+    "המיקום לא זמין. אשרו גישה וטענו מחדש.",
+    "الموقع غير متاح. اسمح به وأعد التحميل.",
+  ],
+  location: ["מיקום", "الموقع"],
+  "second check": ["בדיקה שנייה", "التحقق الثاني"],
+  "the code only": ["הקוד בלבד", "الرمز فقط"],
 
   // =============================================================================
-  // A title written in two styles ("Your <span>shelf.</span>") is translated as a whole
-  // phrase and the words go back into the same pieces, so the styling stays.
+  // Phrases used on many pages.
   // =============================================================================
-  const INLINE = /^(SPAN|B|I|EM|STRONG)$/;
-
-  // =============================================================================
-  // Translates a title made of a few styled pieces as one phrase.
-  // =============================================================================
-  function phrase(el) {
-    if (!el.children.length || el.children.length > 3 || el.closest(SKIP))
-      return;
-    const full = el.textContent.replace(/\s+/g, " ").trim();
-    if (
-      full.length > 90 ||
-      !EXACT.has(full) ||
-      [...el.querySelectorAll("*")].some((c) => !INLINE.test(c.tagName))
-    )
-      return;
-    const nodes = [];
-    const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    let n;
-    while ((n = w.nextNode())) if (n.nodeValue.trim()) nodes.push(n);
-    if (nodes.length < 2) return;
-    const val = EXACT.get(full),
-      parts = val.includes("|") ? val.split("|") : [val];
-    nodes.forEach((x, i) => {
-      const lead = x.nodeValue.match(/^\s*/)[0],
-        tail = x.nodeValue.match(/\s*$/)[0];
-      x.nodeValue =
-        i < parts.length
-          ? lead + parts[i] + (i === nodes.length - 1 ? "" : tail)
-          : "";
-    });
-  }
-
-  // =============================================================================
-  // Translates a whole part of the page: every element, its text and its labels.
-  // =============================================================================
-  function walk(node) {
-    if (node.nodeType === 3) return textNode(node);
-    if (node.nodeType !== 1 && node.nodeType !== 11) return;
-    if (node.nodeType === 1) {
-      if (node.matches("script, style")) return;
-      phrase(node);
-      element(node);
-    }
-    node
-      .querySelectorAll?.("h1, h2, h3, h4, p, div, span, a, li, label, b")
-      .forEach((el) => {
-        if (el.children.length) phrase(el);
-      });
-    node
-      .querySelectorAll?.("[placeholder], [aria-label], [title], option")
-      .forEach(element);
-    const w = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
-    let n;
-    while ((n = w.nextNode())) textNode(n);
-  }
-  if (on) {
-    // =============================================================================
-    // Translates anything the page adds or changes later, as soon as it appears.
-    // =============================================================================
-    new MutationObserver((list) => {
-      for (const m of list) {
-        if (m.type === "childList") m.addedNodes.forEach(walk);
-        else if (m.type === "characterData") textNode(m.target);
-        else if (m.type === "attributes") element(m.target);
-      }
-    }).observe(root, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-      attributes: true,
-      attributeFilter: ATTRS,
-    });
-
-    // =============================================================================
-    // Translates the tab title.
-    // =============================================================================
-    const title = () => {
-      const r = t(document.title);
-      if (r !== document.title) document.title = r;
-    };
-    addEventListener("DOMContentLoaded", () => {
-      walk(document.body);
-      title();
-    });
-    if (lang === "ar") {
-      // =============================================================================
-      // Arabic needs its own fonts; they are loaded here.
-      // =============================================================================
-      const l = document.createElement("link");
-      l.rel = "stylesheet";
-      l.href =
-        "https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Amiri:ital,wght@0,400;0,700;1,400&display=swap";
-      document.head.appendChild(l);
-    }
-  }
-
-  // =============================================================================
-  // Switches to another language and reloads the page.
-  // =============================================================================
-  function set(next) {
-    if (!LANGS[next] || next === lang) return;
-    try {
-      localStorage.setItem("cp.lang", next);
-    } catch (e) {}
-    location.reload();
-  }
-
-  // =============================================================================
-  // The language buttons (English, עברית, العربية) for the account menu and the sign-in
-  // page.
-  // =============================================================================
-  function pickerHTML(cls = "") {
-    return `<div class="lang-pick ${cls}" role="group" aria-label="Language">${Object.entries(
-      LANGS,
-    )
-      .map(
-        ([k, v]) =>
-          `<button type="button" data-lang="${k}" aria-pressed="${k === lang}" lang="${k}">${v.name}</button>`,
-      )
-      .join("")}</div>`;
-  }
-  document.addEventListener("click", (e) => {
-    const b = e.target.closest?.(".lang-pick [data-lang]");
-    if (b) set(b.dataset.lang);
-  });
-
-  return {
-    t,
-    pickerHTML,
-    get lang() {
-      return lang;
-    },
-    get rtl() {
-      return LANGS[lang].dir === "rtl";
-    },
-  };
-})();
+  "Ask the lecturer to mark you present": [
+    "לבקש מהמרצה לסמן אותך נוכח",
+    "اطلب من المحاضر تسجيلك حاضراً",
+  ],
+  "What happened": ["מה קרה", "ماذا حدث"],
+  "e.g. My camera wouldn't open": [
+    "למשל: המצלמה לא נפתחה",
+    "مثلاً: لم تفتح الكاميرا",
+  ],
+  "Send request": ["שליחת בקשה", "إرسال الطلب"],
+  "Request sent to the lecturer": [
+    "הבקשה נשלחה למרצה",
+    "أُرسل الطلب إلى المحاضر",
+  ],
+  "Couldn't send the request": ["הבקשה לא נשלחה", "تعذّر إرسال الطلب"],
+  "*. Say what happened. Your lecturer decides, and you'll see the answer in Attendance.":
+    [
+      "$1. ספרו מה קרה. המרצה מחליט, והתשובה תופיע בנוכחות.",
+      "$1. قل ماذا حدث. المحاضر يقرّر، وسترى الجواب في الحضور.",
+    ],
+  "Are you sure?": ["בטוח?", "هل أنت متأكد؟"],
+  OK: ["אישור", "موافق"],
+  "Course name is required": ["צריך שם לקורס", "اسم المساق مطلوب"],
+  "Could not create a unique code, try again": [
+    "לא הצלחנו ליצור קוד ייחודי, נסו שוב",
+    "تعذّر إنشاء رمز فريد، حاول مجدداً",
+  ],
+  "That isn't an email address": ["זו לא כתובת מייל", "هذا ليس عنوان بريد"],
+  "You already run this course": [
+    "את/ה כבר מנהל/ת את הקורס הזה",
+    "أنت تدير هذا المساق بالفعل",
+  ],
+  "Already a lecturer on this course": [
+    "כבר מרצה בקורס הזה",
+    "محاضر في هذا المساق بالفعل",
+  ],
+  "Only the course's owner can add lecturers (and run the latest schema.sql).":
+    [
+      "רק בעל/ת הקורס יכול להוסיף מרצים (והריצו את schema.sql העדכני).",
+      "مالك المساق فقط يضيف محاضرين (وشغّل أحدث schema.sql).",
+    ],
+  "The PDF is too big (max 50 MB)": [
+    "ה-PDF גדול מדי (עד 50 MB)",
+    "ملف PDF كبير جداً (الحد 50 MB)",
+  ],
+  "The file is too big (max 25 MB)": [
+    "הקובץ גדול מדי (עד 25 MB)",
+    "الملف كبير جداً (الحد 25 MB)",
+  ],
+  "Write a question": ["כתבו שאלה", "اكتب سؤالاً"],
+  "Add at least 2 answers": ["הוסיפו לפחות 2 תשובות", "أضف إجابتين على الأقل"],
+  "Give the assignment a title": ["תנו למטלה שם", "أعطِ الواجب عنواناً"],
+  "Assignment not found": ["המטלה לא נמצאה", "الواجب غير موجود"],
+  "You are not on the list for this course": [
+    "את/ה לא ברשימה של הקורס הזה",
+    "أنت لست في قائمة هذا المساق",
+  ],
+  "Upload failed: *": ["ההעלאה נכשלה: $1", "فشل الرفع: $1"],
+  "Interrupted: the page was closed while working. Try again.": [
+    "הופסק: הדף נסגר באמצע. נסו שוב.",
+    "توقف: أُغلقت الصفحة أثناء العمل. حاول مجدداً.",
+  ],
+  "Printing failed": ["ההדפסה נכשלה", "فشلت الطباعة"],
+  "Excel downloaded": ["Excel הורד", "تم تنزيل Excel"],
+  "A viewer library didn't load (are you online?)": [
+    "רכיב תצוגה לא נטען (יש חיבור?)",
+    "لم تُحمَّل أداة العرض (هل أنت متصل؟)",
+  ],
+  "Could not load the Excel library (are you online?)": [
+    "לא ניתן היה לטעון את Excel (יש חיבור?)",
+    "تعذّر تحميل Excel (هل أنت متصل؟)",
+  ],
+  "The Excel reader didn't load": [
+    "קורא ה-Excel לא נטען",
+    "لم يُحمَّل قارئ Excel",
+  ],
+  "Sign in again, then try once more.": [
+    "התחברו שוב ונסו שוב.",
+    "سجّل الدخول مجدداً ثم حاول مرة أخرى.",
+  ],
+  "Loading…": ["טוען…", "جارٍ التحميل…"],
+};
