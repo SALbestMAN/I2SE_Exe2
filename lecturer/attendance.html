@@ -1,0 +1,803 @@
+<!doctype html>
+<!-- =============================================================================
+     A course's attendance sheet: one row per student, one column per lecture, with
+     present, partial and absent marks and a total. The lecturer can change a mark by
+     hand, see the details of every check, answer requests to be marked present, and
+     download the sheet (Excel or CSV) and the QR frames log.
+     ============================================================================= -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <meta name="theme-color" content="#F3F0E8" />
+    <meta name="darkreader-lock" />
+    <title>Attendance</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Heebo:wght@400;500;600;700;800;900&family=Frank+Ruhl+Libre:wght@400;500;700&display=swap"
+    />
+    <link rel="stylesheet" href="../css/style.css?v=7.0" />
+    <script src="../js/i18n-strings.js?v=7.0"></script>
+    <script src="../js/i18n.js?v=7.0"></script>
+    <link rel="expect" href="#page-end" blocking="render" />
+  </head>
+  <body>
+    <script>
+      // =============================================================================
+      // Runs before anything is drawn. When the person arrives from (or goes into) the live
+      // room, the curtain sheet is still covering the screen, so it is put back right away
+      // and the page never flashes in between. See js/curtain.js.
+      // =============================================================================
+      try {
+        var cpO = JSON.parse(sessionStorage.getItem("cp.curtain") || "null"),
+          cpN = (performance.getEntriesByType("navigation")[0] || {}).type,
+          cpD = document.body.classList.contains("dark-screen");
+        sessionStorage.removeItem("cp.curtain");
+        if (
+          !cpO &&
+          cpN === "back_forward" &&
+          cpD !== (sessionStorage.getItem("cp.fromDark") === "1")
+        )
+          cpO = { dir: "back", color: "blue" };
+        if (cpO) {
+          var cpC = document.createElement("div");
+          cpC.className =
+            "curtain " +
+            (cpO.color === "ink" ? "ink" : "blue") +
+            (cpO.dir === "back" ? " edge-left" : " edge-right");
+          cpC.setAttribute("aria-hidden", "true");
+          cpC.dataset.dir = cpO.dir;
+          cpC.dataset.mode = "slide";
+          document.body.prepend(cpC);
+        }
+      } catch (e) {}
+    </script>
+    <div id="topbar"></div>
+    <main class="container">
+      <div id="course-head" data-tab="attendance"></div>
+      <div class="page-head">
+        <h2
+          class="section-title"
+          style="
+            font-size: clamp(44px, 5.4vw, 80px);
+            line-height: 0.9;
+            letter-spacing: -0.055em;
+          "
+        >
+          Who was <span class="serif"><span class="hl">there?</span></span>
+        </h2>
+        <div class="row wrap" style="gap: 10px">
+          <button class="btn btn-line btn-lg" id="b-frames">
+            QR frames log
+          </button>
+          <button class="btn btn-primary btn-lg" id="b-dl"></button>
+        </div>
+      </div>
+
+      <dialog
+        id="dl-dialog"
+        class="account-menu"
+        style="width: min(460px, calc(100% - 32px))"
+      >
+        <h2 style="font-size: 19px">Download attendance</h2>
+        <p class="small muted">
+          One lecture, or every lecture of the course in one sheet.
+        </p>
+        <label class="field">Lectures<select id="dl-session"></select></label>
+        <div class="stack" style="gap: 6px">
+          <span class="small" style="font-weight: 600">File</span>
+          <div class="seg" role="group" aria-label="File type">
+            <button type="button" data-kind="xlsx" aria-pressed="true">
+              Excel
+            </button>
+            <button type="button" data-kind="csv" aria-pressed="false">
+              CSV
+            </button>
+          </div>
+        </div>
+        <div class="row" style="gap: 8px; justify-content: flex-end">
+          <button type="button" class="btn" id="dl-close">Cancel</button>
+          <button type="button" class="btn btn-primary" id="dl-go">
+            Download
+          </button>
+        </div>
+      </dialog>
+
+      <dialog
+        id="frames-dialog"
+        class="account-menu"
+        style="width: min(460px, calc(100% - 32px))"
+      >
+        <h2 style="font-size: 19px">QR frames log</h2>
+        <p class="small muted">
+          Every frame the projector showed, in order, with the exact time.
+        </p>
+        <label class="field">Session<select id="fd-session"></select></label>
+        <div class="row" style="gap: 8px; justify-content: flex-end">
+          <button type="button" class="btn" id="fd-close">Close</button>
+          <button type="button" class="btn" id="fd-csv">CSV</button>
+          <button type="button" class="btn btn-primary" id="fd-xls">
+            Excel
+          </button>
+        </div>
+      </dialog>
+
+      <div
+        class="row wrap"
+        role="group"
+        aria-label="Session"
+        id="sess-chips"
+        style="gap: 6px"
+      ></div>
+
+      <section class="stat-card" aria-label="Summary">
+        <div class="stat-grid" id="stats"></div>
+        <div class="hatch-bar" aria-hidden="true" id="hatch"></div>
+      </section>
+
+      <!-- =============================================================================
+       Students who could not check in and asked to be marked present.
+       ============================================================================= -->
+      <section class="table-card hidden" id="req-card">
+        <div class="table-head">
+          <div>
+            <h3 style="font-size: 17px" id="req-title"></h3>
+            <p class="small muted" style="margin-top: 2px">
+              Students who couldn't check in. Marking someone present counts
+              both checks for that lecture.
+            </p>
+          </div>
+        </div>
+        <div id="req-list"></div>
+        <details id="req-done" class="hidden" style="padding: 0 20px 14px">
+          <summary
+            class="small muted"
+            style="
+              cursor: pointer;
+              min-height: 36px;
+              display: flex;
+              align-items: center;
+            "
+            id="req-done-sum"
+          ></summary>
+          <div id="req-done-list"></div>
+        </details>
+      </section>
+
+      <div class="split">
+        <section class="main table-card strong" aria-label="Attendance grid">
+          <div class="table-head" style="gap: 12px">
+            <label class="search"
+              ><svg
+                aria-hidden="true"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#5E5A53"
+                stroke-width="2"
+                stroke-linecap="round"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="M20 20l-3.5-3.5" /></svg
+              ><span class="sr-only">Search students</span
+              ><input
+                type="search"
+                id="search"
+                placeholder="Search name or email"
+            /></label>
+            <div class="legend">
+              <span><i class="P"></i>Present</span
+              ><span><i class="H"></i>Partial</span
+              ><span><i class="A"></i>Absent</span>
+            </div>
+          </div>
+          <div
+            class="table-head"
+            style="padding-top: 10px; padding-bottom: 10px; gap: 16px"
+          >
+            <label class="row mono muted" style="gap: 8px; font-size: 10px"
+              >Show
+              <select
+                id="filter"
+                class="input"
+                style="
+                  min-height: 36px;
+                  height: 36px;
+                  width: auto;
+                  font-size: 13px;
+                "
+              >
+                <option value="all">Everyone</option>
+                <option value="A">Absent in the chosen lecture</option>
+                <option value="H">Partial in the chosen lecture</option>
+              </select></label
+            >
+            <label
+              class="row mono muted"
+              style="gap: 8px; font-size: 10px; margin-inline-start: auto"
+              >Partial counts as
+              <select
+                id="partial-weight"
+                class="input"
+                style="
+                  min-height: 36px;
+                  height: 36px;
+                  width: auto;
+                  font-size: 13px;
+                "
+              >
+                <option value="1">Present</option>
+                <option value="0.5" selected>Half</option>
+                <option value="0">Absent</option>
+              </select></label
+            >
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead id="att-head"></thead>
+              <tbody id="att-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <aside
+          class="side-col card ink stack"
+          style="border-radius: 24px; padding: 22px; gap: 14px"
+          id="detail"
+          aria-live="polite"
+        >
+          <p class="small" style="color: var(--on-dark-2)">
+            Click a cell to see how that check-in went.
+          </p>
+        </aside>
+      </div>
+    </main>
+
+    <script src="../js/config.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/api-supabase.js?v=7.0"></script>
+    <script src="../js/export.js?v=7.0"></script>
+    <script src="../js/ui.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+    <script src="../js/curtain.js?v=7.0"></script>
+    <script src="../js/motion.js?v=7.0"></script>
+    <script src="../js/printer.js?v=7.0"></script>
+    <script>
+      // =============================================================================
+      // The attendance sheet page's code.
+      // =============================================================================
+      (async () => {
+        renderTopbar();
+        const course = await getCourse();
+        if (!course) {
+          $("main").innerHTML =
+            '<p class="muted">No courses yet. <a href="courses.html">Create one</a>.</p>';
+          return;
+        }
+
+        // =============================================================================
+        // The symbol for each mark in the sheet: ✓ present, ½ partial, – absent.
+        // =============================================================================
+        const SYM = { P: "✓", H: "½", A: "–" };
+        let data,
+          selected = null;
+        let focus = param("session") || null;
+
+        $("#b-dl").innerHTML =
+          icon("download", 16, "currentColor", 2.2) + "Export";
+
+        // =============================================================================
+        // Downloads go through the printer animation: it prints a small copy of the sheet
+        // while the file downloads.
+        // =============================================================================
+        function printSheet(kind, sessionId) {
+          if (!data) return;
+          const d = sessionId ? ATT.only(data, sessionId) : data,
+            one = d.one;
+          Printer.open({
+            title: one ? `Attendance, ${one.short}` : "Attendance sheet",
+            sub: one
+              ? `${course.name}, ${new Date(one.session.startedAt).toLocaleDateString("en-GB")}`
+              : `${course.name}, all ${d.cols.length} lectures`,
+            rows: d.rows.map((r) => [
+              r.name,
+              one
+                ? ATT.LABEL[r.marks[0]]
+                : r.marks
+                    .slice(-4)
+                    .map((m) => SYM[m])
+                    .join("  ") +
+                  "   " +
+                  r.pct,
+            ]),
+            note: one
+              ? `${d.rows.filter((r) => r.marks[0] !== "A").length} of ${d.rows.length} students came`
+              : `${d.rows.length} students, ${d.cols.length} lectures`,
+            done:
+              kind === "xlsx" ? "Excel file downloaded" : "CSV file downloaded",
+            action: async () => {
+              if (kind !== "xlsx") return ATT.exportCSV(course, d);
+              try {
+                await ATT.exportXLSX(course, d);
+              } catch (e) {
+                ATT.exportCSV(course, d);
+                throw new Error(
+                  "Excel couldn't load, so a CSV file was downloaded instead.",
+                );
+              }
+            },
+          });
+        }
+
+        // =============================================================================
+        // The file type chosen for the download (Excel by default).
+        // =============================================================================
+        let dlKind = "xlsx";
+
+        // =============================================================================
+        // The Download button: the whole sheet, or one lecture.
+        // =============================================================================
+        $("#b-dl").addEventListener("click", () => {
+          if (!data?.cols.length)
+            return toast("No lectures with attendance yet");
+          $("#dl-session").innerHTML =
+            `<option value="">All lectures (${data.cols.length})</option>` +
+            data.sessions
+              .slice()
+              .reverse()
+              .map(
+                (x) =>
+                  `<option value="${x.id}">L${x.number}, ${esc(x.title || "")}, ${new Date(x.startedAt).toLocaleDateString("en-GB")}</option>`,
+              )
+              .join("");
+          $("#dl-dialog").showModal();
+        });
+        $all("#dl-dialog [data-kind]").forEach((b) =>
+          b.addEventListener("click", () => {
+            dlKind = b.dataset.kind;
+            $all("#dl-dialog [data-kind]").forEach((x) =>
+              x.setAttribute("aria-pressed", x === b),
+            );
+          }),
+        );
+        $("#dl-close").addEventListener("click", () => $("#dl-dialog").close());
+        $("#dl-go").addEventListener("click", () => {
+          const id = $("#dl-session").value;
+          $("#dl-dialog").close();
+          printSheet(dlKind, id || null);
+        });
+
+        // =============================================================================
+        // QR frames log: pick a lecture and download every frame that was shown.
+        // =============================================================================
+        $("#b-frames").addEventListener("click", () => {
+          if (!data?.sessions.length)
+            return toast("No sessions with attendance yet");
+          $("#fd-session").innerHTML = data.sessions
+            .slice()
+            .reverse()
+            .map(
+              (x) =>
+                `<option value="${x.id}">L${x.number}, ${esc(x.title)}, ${new Date(x.startedAt).toLocaleDateString("en-GB")}</option>`,
+            )
+            .join("");
+          $("#frames-dialog").showModal();
+        });
+        $("#fd-close").addEventListener("click", () =>
+          $("#frames-dialog").close(),
+        );
+
+        // =============================================================================
+        // Downloads the frames log of the chosen lecture.
+        // =============================================================================
+        async function downloadFrames(kind) {
+          const sess = data.sessions.find(
+            (x) => x.id === $("#fd-session").value,
+          );
+          const btn = kind === "csv" ? $("#fd-csv") : $("#fd-xls");
+          btn.disabled = true;
+          btn.textContent = "Loading…";
+          try {
+            const frames = await API.listFrames(sess.id);
+            if (!frames.length)
+              return toast("This session never showed a code");
+            $("#frames-dialog").close();
+            // A time with milliseconds.
+            const hms = (t) =>
+              new Date(t).toLocaleTimeString("en-GB") +
+              "." +
+              String(t % 1000).padStart(3, "0");
+            Printer.open({
+              receipt: true,
+              title: "QR frames log",
+              sub: `Lecture ${sess.number}, ${kind === "csv" ? "CSV" : "Excel"} file`,
+              rows: frames.slice(0, 14).map((f) => ["#" + f.n, hms(f.t)]),
+              note: `${frames.length} frames in total`,
+              done: `${frames.length} frames downloaded`,
+              action: () => ATT.exportFrames(course, sess, frames, data, kind),
+            });
+          } catch (e) {
+            toast(e.message);
+          } finally {
+            btn.disabled = false;
+            btn.textContent = kind === "csv" ? "CSV" : "Excel";
+          }
+        }
+        $("#fd-csv").addEventListener("click", () => downloadFrames("csv"));
+        $("#fd-xls").addEventListener("click", () => downloadFrames("xlsx"));
+
+        // =============================================================================
+        // The requests to be marked present, with Approve and Refuse buttons.
+        // =============================================================================
+        async function renderRequests() {
+          const all = await API.listAttendanceRequests(course.id).catch(
+            () => [],
+          );
+          const open = all.filter((q) => q.status === "pending"),
+            done = all.filter((q) => q.status !== "pending");
+          $("#req-card").classList.toggle("hidden", !all.length);
+          setText(
+            $("#req-title"),
+            open.length
+              ? `${open.length} request${open.length === 1 ? "" : "s"} to be marked present`
+              : "No open requests",
+          );
+          // One request: the student, the lecture, the reason and the buttons.
+          const row = (q) => `
+      <div class="session-row" style="align-items:flex-start">
+        <div class="session-date"><b>${q.number}</b><span>lecture</span></div>
+        <div style="flex:1 1 240px; min-width:0">
+          <p style="font-weight:600" dir="auto">${esc(q.name || q.email)}<span class="small muted" style="font-weight:400">${q.group ? `, group ${esc(q.group)}` : ""}</span></p>
+          <p dir="auto" style="margin-top:2px; text-align:left">${esc(q.reason)}</p>
+          <p class="small muted" style="margin-top:4px">${esc(q.email)}, asked ${fmtDate(q.createdAt)} ${fmtTime(q.createdAt).slice(0, 5)}${q.title ? `, ${esc(q.title)}` : ""}</p>
+        </div>
+        <div class="row" style="gap:8px">${
+          q.status === "pending"
+            ? `<button class="btn" data-decide="${q.id}" data-ok="0">Decline</button><button class="btn btn-primary" data-decide="${q.id}" data-ok="1">Mark present</button>`
+            : `<span class="chip ${q.status === "approved" ? "ok" : "danger"}">${q.status === "approved" ? "Marked present" : "Declined"}</span>`
+        }</div>
+      </div>`;
+          setHTML($("#req-list"), open.map(row).join(""));
+          $("#req-done").classList.toggle("hidden", !done.length);
+          setText($("#req-done-sum"), `${done.length} decided`);
+          setHTML($("#req-done-list"), done.map(row).join(""));
+        }
+
+        // =============================================================================
+        // Approves or refuses a request.
+        // =============================================================================
+        $("#req-card").addEventListener("click", async (e) => {
+          const b = e.target.closest("[data-decide]");
+          if (!b) return;
+          const ok = b.dataset.ok === "1";
+          b.closest(".session-row")
+            .querySelectorAll("button")
+            .forEach((x) => (x.disabled = true));
+          const res = await API.decideAttendanceRequest(b.dataset.decide, ok);
+          if (res && !res.ok) toast(res.error);
+          else toast(ok ? "Marked present" : "Request declined");
+          renderRequests();
+          render(true);
+        });
+        renderRequests();
+        API.onChange(renderRequests);
+
+        // =============================================================================
+        // True while the sheet is being redrawn.
+        // =============================================================================
+        let busy = false;
+
+        // =============================================================================
+        // Draws the sheet: the lecture chips, the header, one row per student and the totals.
+        // Loads fresh data first unless asked not to.
+        // =============================================================================
+        async function render(refetch = true) {
+          if (refetch || !data) {
+            if (busy) return;
+            busy = true;
+            try {
+              data = await ATT.build(
+                course,
+                Number($("#partial-weight").value),
+              );
+            } finally {
+              busy = false;
+            }
+          }
+          const { cols, rows, sessions } = data;
+          const last = sessions[sessions.length - 1];
+
+          const cur =
+            focus === "all"
+              ? null
+              : sessions.find((x) => x.id === focus) || last;
+          setHTML(
+            $("#sess-chips"),
+            sessions.length
+              ? `<span class="label" style="align-self:center;margin-inline-end:6px;font-size:10px">Session</span>` +
+                  sessions
+                    .map(
+                      (x) =>
+                        `<button type="button" class="btn btn-pill" data-focus="${x.id}" aria-pressed="${cur && x.id === cur.id}">L${x.number}${cur && x.id === cur.id ? ` · ${new Date(x.startedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}</button>`,
+                    )
+                    .join("") +
+                  `<button type="button" class="btn btn-pill" data-focus="all" aria-pressed="${!cur}" style="border-style:dashed">All sessions</button>`
+              : "",
+          );
+
+          if (sessions.length) {
+            const idx = cur ? sessions.indexOf(cur) : -1;
+            const marks = cur
+              ? rows.map((r) => r.marks[idx])
+              : rows.flatMap((r) => r.marks);
+            // How many lectures have this mark.
+            const count = (m) => marks.filter((x) => x === m).length;
+            const blocked = cur
+              ? cur.blocked.length
+              : sessions.reduce((n, x) => n + x.blocked.length, 0);
+            const r = cur ? API.recheckState(cur) : null;
+            setHTML(
+              $("#stats"),
+              [
+                [
+                  "Present",
+                  count("P"),
+                  cur
+                    ? r.enabled
+                      ? r.startedAt
+                        ? "both checks"
+                        : "second check not yet"
+                      : "checked in"
+                    : `over ${sessions.length} lectures`,
+                ],
+                ["Partial", count("H"), "one of two"],
+                [
+                  "Absent",
+                  count("A"),
+                  cur ? `of ${rows.length}` : `of ${marks.length} seats`,
+                ],
+                [
+                  "Blocked",
+                  blocked,
+                  cur
+                    ? cur.endedAt
+                      ? "after it ended"
+                      : "lecture still open"
+                    : "attempts caught",
+                  true,
+                ],
+              ]
+                .map(
+                  ([label, num, sub, bad]) =>
+                    `<div class="stat"><span class="label ${bad && num ? "bad" : ""}">${label}</span><p class="num">${num}</p><p class="sub">${sub}</p></div>`,
+                )
+                .join(""),
+            );
+            const tot = marks.length || 1;
+            setHTML(
+              $("#hatch"),
+              `<span class="p" style="width:${(count("P") / tot) * 100}%"></span><span class="h" style="width:${(count("H") / tot) * 100}%"></span>`,
+            );
+          } else {
+            setHTML(
+              $("#stats"),
+              `<div class="stat" style="grid-column:1/-1"><p style="font-size:24px;font-weight:800;letter-spacing:-0.03em">No lectures <span class="serif">yet.</span></p>
+        <p class="small muted" style="margin-top:4px">Press Start lecture above; each lecture becomes a column here.</p></div>`,
+            );
+            setHTML($("#hatch"), "");
+          }
+
+          setHTML(
+            $("#att-head"),
+            `<tr><th>Student</th>${cols
+              .map(
+                (c) => `
+      <th class="center" ${cur && c.id === cur.id ? 'style="color:var(--ink)"' : ""}>${c.label.split(",")[0]}${c.session.endedAt ? "" : ' <span class="live-pill" title="Open">Live</span>'}
+        <button class="icon-btn" style="min-width:26px;min-height:26px;vertical-align:middle" aria-label="Delete ${c.short}" data-del="${c.id}">${icon("trash", 13, "currentColor", 1.8)}</button></th>`,
+              )
+              .join("")}
+      <th style="text-align:end">Total</th></tr>`,
+          );
+
+          const q = $("#search").value.trim().toLowerCase();
+          const f = $("#filter").value,
+            fi = cur ? sessions.indexOf(cur) : sessions.length - 1;
+          const shown = rows.filter(
+            (r) =>
+              (r.name + " " + r.email).toLowerCase().includes(q) &&
+              (f === "all" || r.marks[fi] === f),
+          );
+          setHTML(
+            $("#att-body"),
+            shown.length
+              ? shown
+                  .map(
+                    (r) => `
+      <tr>
+        <td class="who-cell"><b dir="auto">${esc(r.name)}</b><span dir="ltr">${esc(r.email)}${r.group ? ` · group ${esc(r.group)}` : ""}</span></td>
+        ${r.marks
+          .map(
+            (
+              m,
+              i,
+            ) => `<td class="center"><button class="cell ${m}" style="cursor:pointer;${m === "A" ? "background:transparent" : "border-width:0"};${selected && selected.email === r.email && selected.sessionId === cols[i].id ? "outline:2px solid var(--ink);outline-offset:2px" : ""}"
+             aria-label="${ATT.LABEL[m]} in ${cols[i].short}" data-email="${esc(r.email)}" data-sid="${cols[i].id}">${SYM[m]}</button></td>`,
+          )
+          .join("")}
+        <td class="total" style="text-align:end" dir="ltr">${r.pct}</td>
+      </tr>`,
+                  )
+                  .join("")
+              : `<tr><td colspan="${cols.length + 2}" class="serif muted" style="padding:28px 16px;font-size:22px">${rows.length ? "No match." : "No students on the list yet."}</td></tr>`,
+          );
+          renderDetail();
+        }
+
+        // =============================================================================
+        // Clicking a lecture chip highlights that lecture's column.
+        // =============================================================================
+        $("#sess-chips").addEventListener("click", (e) => {
+          const b = e.target.closest("[data-focus]");
+          if (!b) return;
+          focus = b.dataset.focus;
+          if (focus !== "all" && selected) selected.sessionId = focus;
+          render(false);
+        });
+
+        // =============================================================================
+        // Clicking a mark opens its details on the right.
+        // =============================================================================
+        $("#att-body").addEventListener("click", (e) => {
+          const b = e.target.closest("[data-sid]");
+          if (b) {
+            selected = { email: b.dataset.email, sessionId: b.dataset.sid };
+            render(false);
+          }
+        });
+
+        // =============================================================================
+        // Deletes a lecture and all its check-ins (after asking).
+        // =============================================================================
+        $("#att-head").addEventListener("click", async (e) => {
+          const b = e.target.closest("[data-del]");
+          if (
+            b &&
+            (await ask({
+              title: "Delete this lecture?",
+              message:
+                "All its check-ins are deleted with it. This can't be undone.",
+              confirm: "Delete lecture",
+              danger: true,
+            }))
+          )
+            API.deleteSession(b.dataset.del).then(() => {
+              selected = null;
+              toast("Lecture deleted");
+              render();
+            });
+        });
+
+        // =============================================================================
+        // The detail panel for one student in one lecture: each check with its time, code age,
+        // network and distance, the frames the phone captured, blocked attempts, and buttons
+        // to change the mark by hand.
+        // =============================================================================
+        function renderDetail() {
+          if (!selected && data.rows.length && data.sessions.length) {
+            const f =
+              data.sessions.find((x) => x.id === focus) ||
+              data.sessions[data.sessions.length - 1];
+            selected = { email: data.rows[0].email, sessionId: f.id };
+          }
+          if (!selected) return;
+          const s = data.sessions.find((x) => x.id === selected.sessionId);
+          const r = data.rows.find((x) => x.email === selected.email);
+          if (!s || !r) return;
+          const m = API.statusOf(s, r.email);
+          const rec = s.attendance[r.email] || {};
+          const blocked = s.blocked.filter((b) => b.email === r.email);
+          // One check (first or second) in the detail panel.
+          const checkRow = (c, n, title) => {
+            const li =
+              'style="padding:12px 0;border-bottom:1px solid rgba(243,240,232,.15)"';
+            if (!c)
+              return `<li ${li}><div class="row" style="justify-content:space-between"><span>${title}</span><span class="serif" style="font-size:19px;color:#CFCAC0">${n === 2 && !API.recheckState(s).startedAt ? "not yet" : "not scanned"}</span></div></li>`;
+            // One line of a check: passed or failed, and why.
+            const line = (ok, text) =>
+              `<p class="small" style="color:${ok ? "var(--on-dark-2)" : "var(--hl)"};margin-top:4px">${ok ? "✓" : "!"} ${esc(text)}</p>`;
+            const manual = c.network === "manual";
+            return `<li ${li}><div class="row" style="justify-content:space-between"><span>${title}</span><span class="serif" style="font-size:19px;color:#CFCAC0">${manual ? "set by hand" : "at " + fmtTime(c.time).slice(0, 5)}</span></div>
+        ${
+          manual
+            ? line(true, (c.flags || [])[0] || "Set by the lecturer")
+            : `
+        ${line(true, `Fresh code (${(c.codeAge / 1000).toFixed(1)} s old, ${c.frames} frames)`)}
+        ${c.ping != null ? line(c.ping < 1500, `Internet ${c.ping} ms${c.ping >= 1500 ? " (slow, got extra time)" : ""}`) : ""}
+        ${line(c.network !== "unknown", ATT.NET[c.network] || c.network)}
+        ${c.distance != null ? line(true, `${c.distance} m from lecturer`) : line(false, "Location not available")}
+        ${framesList(c.framesSeen, c.time)}`
+        }</li>`;
+          };
+          // Which frames the phone captured: each frame's number and the time it was on the projector.
+          const framesList = (seen, sentAt) =>
+            !seen?.length
+              ? ""
+              : `
+      <details style="margin-top:6px"><summary class="mono" style="cursor:pointer;color:var(--hl);font-size:10px">${seen.length} frames scanned</summary>
+        <div class="table-scroll" style="max-height:220px;overflow:auto;margin-top:6px;border:1px solid rgba(243,240,232,.15);border-radius:10px;color:var(--paper)">
+          <table><thead><tr><th>Frame</th><th>Shown at</th></tr></thead><tbody>
+          ${seen.map(([n, t]) => `<tr><td>#${n}</td><td>${new Date(t).toLocaleTimeString("en-GB", { hour12: false })}.${String(t % 1000).padStart(3, "0")}</td></tr>`).join("")}
+          </tbody></table></div>
+        ${sentAt ? `<p class="small" style="margin-top:6px;color:var(--on-dark-2)">Sent to the server at ${new Date(sentAt).toLocaleTimeString("en-GB")}</p>` : ""}
+      </details>`;
+          const on2 = API.recheckState(s);
+          const changed = setHTML(
+            $("#detail"),
+            `
+      <div class="mono" style="color:var(--on-dark-2);font-size:10px">Lecture ${pad2(s.number)} · ${new Date(s.startedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit" }).replace("/", ".")}</div>
+      <h2 dir="auto" style="font-family:var(--serif);font-weight:400;font-size:38px;line-height:1.1;letter-spacing:-0.01em;unicode-bidi:plaintext">${esc(r.name)}</h2>
+      <span class="chip" style="align-self:flex-start;${m === "P" ? "background:var(--blue);border-color:var(--blue);color:#fff" : m === "H" ? "background:var(--hl);border-color:var(--hl);color:var(--ink)" : "border-color:rgba(243,240,232,.35);color:var(--paper)"}">${ATT.LABEL[m]}</span>
+      <ol style="list-style:none;margin:0;padding:0;border-top:1px solid rgba(243,240,232,.15)">
+        ${checkRow(rec.check1, 1, "Check 1")}
+        ${on2.enabled ? checkRow(rec.check2, 2, "Check 2") : ""}
+        ${
+          blocked.length
+            ? `<li style="padding:12px 0;border-bottom:1px solid rgba(243,240,232,.15)"><div class="row" style="justify-content:space-between"><span>Blocked</span><span class="serif" style="font-size:19px;color:var(--d-danger)">${blocked.length} attempt${blocked.length > 1 ? "s" : ""}</span></div>
+          ${blocked.map((b) => `<p class="small" style="color:var(--on-dark-2);margin-top:6px">${fmtTime(b.time)}, ${esc(b.reasons.join(", "))}</p>${framesList(b.framesSeen, b.time)}`).join("")}</li>`
+            : ""
+        }
+      </ol>
+      <div class="mono" style="color:var(--on-dark-2);font-size:10px">Override</div>
+      <div role="group" aria-label="Set status by hand" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px">
+        ${[
+          ["P", "Present"],
+          ["H", "Partial"],
+          ["A", "Absent"],
+        ]
+          .map(
+            ([
+              k,
+              l,
+            ]) => `<button type="button" class="btn" data-set="${k}" aria-pressed="${m === k}"
+          ${k === "H" && !on2.startedAt ? 'disabled title="Partial needs a second check"' : ""}
+          style="${m === k ? "background:var(--paper);border-color:var(--paper);color:var(--ink);font-weight:700" : "border-color:rgba(243,240,232,.3);color:var(--paper)"}">${l}</button>`,
+          )
+          .join("")}
+      </div>
+      <p style="font-size:13px;line-height:1.6;color:var(--on-dark-2)">Set automatically by the session's check-in rules. A status you set by hand is marked "Set by the lecturer" in the sheet and in exports.</p>`,
+          );
+          if (!changed) return;
+          $all("#detail [data-set]").forEach((b) =>
+            b.addEventListener("click", async () => {
+              if (b.getAttribute("aria-pressed") === "true") return;
+              $all("#detail [data-set]").forEach((x) => (x.disabled = true));
+              const res = await API.setAttendance(s.id, r.email, b.dataset.set);
+              if (res && !res.ok) toast(res.error);
+              else
+                toast(
+                  `${r.name}: ${ATT.LABEL[b.dataset.set]} in lecture ${s.number}`,
+                );
+              render(true);
+            }),
+          );
+        }
+
+        ["#search", "#filter"].forEach((id) =>
+          $(id).addEventListener("input", () => render(false)),
+        );
+        $("#partial-weight").addEventListener("input", () => render(true));
+        render();
+        API.onChange(() => {
+          const a = document.activeElement;
+          if (!a || !/SELECT|INPUT/.test(a.tagName)) render(true);
+        });
+      })();
+    </script>
+    <span id="page-end" hidden></span>
+  </body>
+</html>
