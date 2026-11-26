@@ -1,0 +1,355 @@
+<!doctype html>
+<!-- =============================================================================
+     The lecturer's home: their courses as books on a shelf. The panel next to the shelf
+     shows the course in front (students, lectures, join code) with buttons to open it or
+     start a lecture now. The last book is a form for creating a new course.
+     ============================================================================= -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <meta name="theme-color" content="#F3F0E8" />
+    <meta name="darkreader-lock" />
+    <title>Courses</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Heebo:wght@400;500;600;700;800;900&family=Frank+Ruhl+Libre:wght@400;500;700&display=swap"
+    />
+    <link rel="stylesheet" href="../css/style.css?v=7.0" />
+    <script src="../js/i18n-strings.js?v=7.0"></script>
+    <script src="../js/i18n.js?v=7.0"></script>
+    <link rel="expect" href="#page-end" blocking="render" />
+  </head>
+  <body>
+    <script>
+      // =============================================================================
+      // Runs before anything is drawn. When the person arrives from (or goes into) the live
+      // room, the curtain sheet is still covering the screen, so it is put back right away
+      // and the page never flashes in between. See js/curtain.js.
+      // =============================================================================
+      try {
+        var cpO = JSON.parse(sessionStorage.getItem("cp.curtain") || "null"),
+          cpN = (performance.getEntriesByType("navigation")[0] || {}).type,
+          cpD = document.body.classList.contains("dark-screen");
+        sessionStorage.removeItem("cp.curtain");
+        if (
+          !cpO &&
+          cpN === "back_forward" &&
+          cpD !== (sessionStorage.getItem("cp.fromDark") === "1")
+        )
+          cpO = { dir: "back", color: "blue" };
+        if (cpO) {
+          var cpC = document.createElement("div");
+          cpC.className =
+            "curtain " +
+            (cpO.color === "ink" ? "ink" : "blue") +
+            (cpO.dir === "back" ? " edge-left" : " edge-right");
+          cpC.setAttribute("aria-hidden", "true");
+          cpC.dataset.dir = cpO.dir;
+          cpC.dataset.mode = "slide";
+          document.body.prepend(cpC);
+        }
+      } catch (e) {}
+    </script>
+    <div id="topbar"></div>
+    <main class="container">
+      <header class="page-head">
+        <div>
+          <span class="kicker" id="course-count">&nbsp;</span>
+          <h1 class="page-title">
+            Your <span class="serif"><span class="hl">shelf.</span></span>
+          </h1>
+        </div>
+        <button type="button" class="btn btn-line btn-lg" id="new-btn">
+          <svg
+            aria-hidden="true"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+          >
+            <path d="M12 5v14M5 12h14" /></svg
+          >New course
+        </button>
+      </header>
+
+      <div>
+        <div class="rule-top"></div>
+        <section
+          class="shelf"
+          id="shelf"
+          tabindex="0"
+          aria-roledescription="carousel"
+          aria-label="Your courses"
+        ></section>
+        <div class="shelf-bar center">
+          <div class="shelf-nav">
+            <button
+              class="round-btn"
+              id="prev"
+              aria-label="Previous course"
+            ></button>
+            <span
+              class="shelf-pos"
+              id="pos"
+              aria-live="polite"
+              dir="ltr"
+            ></span>
+            <button
+              class="round-btn fill"
+              id="next"
+              aria-label="Next course"
+            ></button>
+          </div>
+        </div>
+        <section
+          class="focus-panel big"
+          id="panel"
+          aria-label="Selected course"
+        ></section>
+      </div>
+    </main>
+    <div class="page-fade" id="fade"></div>
+
+    <script src="../js/config.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/api-supabase.js?v=7.0"></script>
+    <script src="../js/ui.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+    <script src="../js/curtain.js?v=7.0"></script>
+    <script src="../js/motion.js?v=7.0"></script>
+    <script src="../js/shelf.js?v=7.0"></script>
+    <script>
+      // =============================================================================
+      // The course shelf page's code.
+      // =============================================================================
+      (async () => {
+        renderTopbar(param("live") ? "live" : "courses");
+
+        // =============================================================================
+        // The panel beside the shelf that describes the course in front.
+        // =============================================================================
+        const panel = $("#panel");
+        $("#prev").innerHTML =
+          `<span class="flip" style="display:flex">${icon("back", 18, "currentColor", 2.2)}</span>`;
+        $("#next").innerHTML =
+          `<span class="flip" style="display:flex;transform:rotate(180deg)">${icon("back", 18, "currentColor", 2.2)}</span>`;
+
+        // =============================================================================
+        // The shelf of course books. When another book comes to the front, the panel shows
+        // that course.
+        // =============================================================================
+        const shelf = Shelf.create({
+          root: $("#shelf"),
+          prev: $("#prev"),
+          next: $("#next"),
+          pos: $("#pos"),
+          fade: $("#fade"),
+          storeKey: "cp.shelf.lect",
+          extra: {
+            label: "New course",
+            a: "New",
+            b: "course",
+            hint: "Blank book",
+          },
+          footOf: (c) =>
+            c.students == null
+              ? ""
+              : `${c.students} student${c.students === 1 ? "" : "s"} · ${c.sessionsCount} session${c.sessionsCount === 1 ? "" : "s"}`,
+          hrefOf: (c) => `course.html?course=${c.code}`,
+          onActive: drawPanel,
+          onExtra: () => $("#nc-name")?.focus(),
+        });
+
+        // =============================================================================
+        // Changes the panel's content. When a different book came to the front it cross-fades;
+        // background refreshes change it quietly.
+        // =============================================================================
+        const swapPanel = (el, html, changed) => {
+          if (el._h === html) return;
+          el._h = html;
+          el.innerHTML = html;
+          if (changed) {
+            el.classList.remove("swap");
+            void el.offsetWidth;
+            el.classList.add("swap");
+          }
+        };
+
+        // =============================================================================
+        // The join code offered for the next new course.
+        // =============================================================================
+        let nextCode = API.newCode();
+
+        // =============================================================================
+        // Draws the panel for the course in front: its numbers, its join code, and buttons to
+        // open it or start a lecture now. For the last, empty book it shows the "New course"
+        // form.
+        // =============================================================================
+        function drawPanel(c, i, changed) {
+          if (!c) {
+            swapPanel(
+              panel,
+              `<form class="focus-form" id="new-course">
+          <label class="field" style="flex:2 1 240px">Course name<input id="nc-name" placeholder="e.g. Software Engineering" required dir="auto"></label>
+          <button class="btn btn-primary" style="min-height:50px">Create</button>
+          <div style="flex:1 1 100%" id="nc-sched">${scheduleEditorHTML([])}</div>
+        </form>
+        <p class="mono muted" style="width:100%;font-size:10px">Join code <b style="color:var(--ink);letter-spacing:.2em" dir="ltr">${nextCode}</b> · students type it to join</p>`,
+              changed,
+            );
+            return;
+          }
+          swapPanel(
+            panel,
+            `
+      <div style="flex:1 1 260px;min-width:0">
+        <h2 dir="auto">${titleHTML(c.name)}</h2>
+        <div class="focus-meta">
+          <span><span class="label">Students</span> <b>${c.students ?? "–"}</b></span>
+          <span><span class="label">Sessions</span> <b>${c.sessionsCount ?? "–"}</b></span>
+          ${scheduleText(c) ? `<span><span class="label">Lectures</span> <b>${esc(scheduleText(c))}</b></span>` : ""}
+          ${c.live ? '<span class="live-pill" style="align-self:center">● Live now</span>' : ""}
+          ${c.requests ? `<a href="requests.html" class="mono" style="align-self:center;font-size:10px">${c.requests} join request${c.requests > 1 ? "s" : ""}</a>` : ""}
+        </div>
+      </div>
+      <div class="focus-actions">
+        <button type="button" class="code-btn" data-copy="${c.code}" aria-label="Copy join code ${c.code}"><span dir="ltr">${c.code}</span>${icon("copy", 16)}</button>
+        <button class="btn btn-line btn-lg" data-act="open">Open course</button>
+        <button class="btn btn-accent btn-lg" data-quick="${c.code}">${c.live ? "Open live room" : `<svg aria-hidden="true" class="flip" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg>Start lecture`}</button>
+      </div>`,
+            changed,
+          );
+        }
+
+        // =============================================================================
+        // The panel's buttons: copy the join code, open the course, or start a lecture right
+        // now.
+        // =============================================================================
+        panel.addEventListener("click", async (e) => {
+          const copy = e.target.closest("[data-copy]");
+          if (copy) {
+            navigator.clipboard?.writeText(copy.dataset.copy);
+            return toast(`Copied ${copy.dataset.copy}`);
+          }
+          const quick = e.target.closest("[data-quick]");
+          if (quick) {
+            quick.disabled = true;
+            const course = await API.getCourseByCode(quick.dataset.quick);
+            const live =
+              (await API.activeSession(course.id)) ||
+              (await API.quickSession(course.id));
+            return window.Curtain
+              ? Curtain.go(`live.html?course=${course.code}&session=${live.id}`)
+              : (location.href = `live.html?course=${course.code}&session=${live.id}`);
+          }
+          if (e.target.closest("[data-act=open]")) shelf.open();
+        });
+        wireSchedule(panel);
+
+        // =============================================================================
+        // Creates a new course from the form and brings its book to the front.
+        // =============================================================================
+        panel.addEventListener("submit", async (e) => {
+          if (e.target.id !== "new-course") return;
+          e.preventDefault();
+          const btn = e.target.querySelector(".btn-primary");
+          btn.disabled = true;
+          const res = await API.createCourse({
+            name: $("#nc-name").value,
+            schedule: readSchedule($("#nc-sched")),
+            code: nextCode,
+          });
+          btn.disabled = false;
+          if (!res.ok) return toast(res.error);
+          toast(`Created ${res.course.name}, join code ${res.course.code}`);
+          try {
+            sessionStorage.removeItem("cp.side-courses");
+          } catch (x) {}
+          window.Curtain
+            ? Curtain.go(`course.html?course=${res.course.code}`)
+            : (location.href = `course.html?course=${res.course.code}`);
+        });
+        $("#new-btn").addEventListener("click", () => {
+          shelf.go(1e6);
+          setTimeout(() => $("#nc-name")?.focus({ preventScroll: true }), 420);
+        });
+
+        // =============================================================================
+        // Shows the list of courses on the shelf and the totals at the top of the page.
+        // =============================================================================
+        function draw(list) {
+          const students = list.reduce((n, c) => n + (c.students || 0), 0);
+          if (list.some((c) => c.students == null)) {
+            setText(
+              $("#course-count"),
+              `${semester()} · ${list.length} course${list.length === 1 ? "" : "s"}`,
+            );
+            const w = list.map((c, i) => ({ ...c, cover: i }));
+            shelf.set(w);
+            return;
+          }
+          setText(
+            $("#course-count"),
+            list.length
+              ? `${semester()} · ${list.length} course${list.length === 1 ? "" : "s"} · ${students} student${students === 1 ? "" : "s"}`
+              : `${semester()} · an empty shelf`,
+          );
+          const withCover = list.map((c, i) => ({ ...c, cover: i }));
+          shelf.set(withCover);
+          sideCourses(withCover);
+        }
+
+        // =============================================================================
+        // Loads the courses with their numbers from the server and draws them.
+        // =============================================================================
+        async function render() {
+          const base = await API.listCourses();
+          if (!cacheGet("lect-courses"))
+            draw(
+              base.map((c) => ({ ...c, students: null, sessionsCount: null })),
+            );
+          const list = await Promise.all(base.map(API.view));
+          cacheSet("lect-courses", list);
+          draw(list);
+          return list;
+        }
+
+        // =============================================================================
+        // Shows what this tab saw last time straight away, then loads fresh data, and keeps
+        // refreshing every few seconds.
+        // =============================================================================
+        const cached = cacheGet("lect-courses");
+        if (cached) {
+          draw(cached);
+          bootDone();
+        }
+        const fresh = render();
+        API.onChange(render);
+
+        if (param("live")) {
+          const list = await fresh;
+          const lives = (
+            await Promise.all(
+              list.map(async (c) => ({ c, s: await API.activeSession(c.id) })),
+            )
+          ).filter((x) => x.s);
+          if (lives.length)
+            return location.replace(
+              `live.html?course=${lives[0].c.code}&session=${lives[0].s.id}`,
+            );
+          toast("No lecture is live. Pick a course and press Start lecture.");
+          history.replaceState(null, "", "courses.html");
+        }
+      })();
+    </script>
+    <span id="page-end" hidden></span>
+  </body>
+</html>
