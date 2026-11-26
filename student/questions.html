@@ -1,0 +1,196 @@
+<!doctype html>
+<!-- =============================================================================
+     The student's own questions from every course, with the lecturer's answers.
+     ============================================================================= -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <meta name="theme-color" content="#F3F0E8" />
+    <meta name="darkreader-lock" />
+    <title>My questions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Heebo:wght@400;500;600;700;800;900&family=Frank+Ruhl+Libre:wght@400;500;700&display=swap"
+    />
+    <link rel="stylesheet" href="../css/style.css?v=7.0" />
+    <script src="../js/i18n-strings.js?v=7.0"></script>
+    <script src="../js/i18n.js?v=7.0"></script>
+    <link rel="expect" href="#page-end" blocking="render" />
+  </head>
+  <body>
+    <script>
+      // =============================================================================
+      // Runs before anything is drawn. When the person arrives from (or goes into) the live
+      // room, the curtain sheet is still covering the screen, so it is put back right away
+      // and the page never flashes in between. See js/curtain.js.
+      // =============================================================================
+      try {
+        var cpO = JSON.parse(sessionStorage.getItem("cp.curtain") || "null"),
+          cpN = (performance.getEntriesByType("navigation")[0] || {}).type,
+          cpD = document.body.classList.contains("dark-screen");
+        sessionStorage.removeItem("cp.curtain");
+        if (
+          !cpO &&
+          cpN === "back_forward" &&
+          cpD !== (sessionStorage.getItem("cp.fromDark") === "1")
+        )
+          cpO = { dir: "back", color: "blue" };
+        if (cpO) {
+          var cpC = document.createElement("div");
+          cpC.className =
+            "curtain " +
+            (cpO.color === "ink" ? "ink" : "blue") +
+            (cpO.dir === "back" ? " edge-left" : " edge-right");
+          cpC.setAttribute("aria-hidden", "true");
+          cpC.dataset.dir = cpO.dir;
+          cpC.dataset.mode = "slide";
+          document.body.prepend(cpC);
+        }
+      } catch (e) {}
+    </script>
+    <div class="phone">
+      <main class="phone-main">
+        <header class="page-head">
+          <div>
+            <span class="kicker" id="kicker">&nbsp;</span>
+            <h1 class="page-title">
+              My <span class="serif"><span class="hl">questions.</span></span>
+            </h1>
+          </div>
+          <div
+            class="row"
+            style="gap: 8px"
+            role="group"
+            aria-label="Show"
+            id="show"
+          >
+            <button
+              type="button"
+              class="btn btn-pill"
+              data-show="all"
+              aria-pressed="true"
+            >
+              All
+            </button>
+            <button
+              type="button"
+              class="btn btn-pill"
+              data-show="answered"
+              aria-pressed="false"
+            >
+              Answered
+            </button>
+            <button
+              type="button"
+              class="btn btn-pill"
+              data-show="open"
+              aria-pressed="false"
+            >
+              Waiting
+            </button>
+          </div>
+        </header>
+        <div id="list" class="narrow"></div>
+      </main>
+    </div>
+    <script src="../js/config.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/api-supabase.js?v=7.0"></script>
+    <script src="../js/ui.js?v=7.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+    <script src="../js/curtain.js?v=7.0"></script>
+    <script src="../js/motion.js?v=7.0"></script>
+    <script>
+      // =============================================================================
+      // The student questions page's code.
+      // =============================================================================
+      (async () => {
+        const me = renderStudentNav("questions");
+        let show = "all",
+          items = [];
+
+        // =============================================================================
+        // Draws the student's questions, answered ones with the lecturer's reply.
+        // =============================================================================
+        function draw() {
+          const answered = items.filter(
+            (x) => x.q.reply || x.q.answered,
+          ).length;
+          setText(
+            $("#kicker"),
+            items.length
+              ? `${items.length} asked · ${answered} answered`
+              : "Questions you asked, in every course",
+          );
+          const rows = items.filter(
+            (x) =>
+              show === "all" ||
+              (show === "answered") === !!(x.q.reply || x.q.answered),
+          );
+          setHTML(
+            $("#list"),
+            rows.length
+              ? rows
+                  .map(
+                    ({ q, c }) => `
+      <article class="q-item">
+        <span class="vote-btn" aria-label="${q.votes} vote${q.votes === 1 ? "" : "s"}" style="cursor:default">${icon("up", 14, "currentColor", 2.4)}<span>${q.votes}</span></span>
+        <div style="flex:1;min-width:0">
+          <p class="q-text" dir="auto">${questionTextHTML(q.text)}</p>
+          <p class="mono muted q-meta" style="font-size:10px"><a href="course.html?course=${c.code}" style="color:inherit">${esc(c.name)}</a> · ${fmtDate(q.createdAt)} ${fmtTime(q.createdAt).slice(0, 5)}${q.answered && !q.reply ? " · answered in class" : ""}</p>
+          ${q.reply ? `<div class="reply"><span class="reply-head">Lecturer replied</span><p class="reply-text" dir="auto">${esc(q.reply)}</p></div>` : ""}
+        </div>
+      </article>`,
+                  )
+                  .join("")
+              : `<p class="serif muted" style="font-size:24px;padding:20px 0;border-top:1px solid var(--line)">${items.length ? "Nothing here." : "You haven't asked anything yet. Every course has an Ask box."}</p>`,
+          );
+        }
+        $("#show").addEventListener("click", (e) => {
+          const b = e.target.closest("[data-show]");
+          if (!b) return;
+          show = b.dataset.show;
+          $all("#show [data-show]").forEach((x) =>
+            x.setAttribute("aria-pressed", x === b),
+          );
+          draw();
+        });
+
+        // =============================================================================
+        // Loads the student's questions from all their courses.
+        // =============================================================================
+        async function render() {
+          const mine = await API.myCourses(me.email);
+          const lists = await Promise.all(
+            mine.map(async (c) =>
+              ((await API.listComments(c.id, me.email)) || [])
+                .filter((q) => q.mine)
+                .map((q) => ({ q, c: { code: c.code, name: c.name } })),
+            ),
+          );
+          items = lists.flat().sort((a, b) => b.q.createdAt - a.q.createdAt);
+          cacheSet("stu-q", items);
+          draw();
+        }
+
+        // =============================================================================
+        // Shows what this tab saw last time, then loads fresh data.
+        // =============================================================================
+        const cached = cacheGet("stu-q");
+        if (cached) {
+          items = cached;
+          draw();
+          bootDone();
+        }
+        render();
+        API.onChange(render);
+      })();
+    </script>
+    <span id="page-end" hidden></span>
+  </body>
+</html>
