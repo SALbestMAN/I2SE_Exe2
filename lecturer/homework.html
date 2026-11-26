@@ -1,9 +1,8 @@
 <!doctype html>
 <!-- =============================================================================
-     Homework on the lecturer's side. Without ?a= in the address it lists the course's
-     assignments and lets the lecturer create a new one (title, instructions, due date,
-     the assignment PDF). With ?a=<id> it shows one assignment: who handed in what, AI
-     reviews and scores, copied-work checks, class insights, and printing.
+     One assignment on the student's side: the instructions and PDF, handing in work (a
+     file, pasted text and/or a GitHub link), and the AI review with the score and how
+     the work compares with the class (classmates stay anonymous).
      ============================================================================= -->
 <html lang="en">
   <head>
@@ -21,7 +20,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Heebo:wght@400;500;600;700;800;900&family=Frank+Ruhl+Libre:wght@400;500;700&display=swap"
     />
     <link rel="stylesheet" href="../css/style.css?v=7.0" />
-    <script src="../js/i18n-strings.js?v=7.1"></script>
+    <script src="../js/i18n-strings.js?v=7.0"></script>
     <script src="../js/i18n.js?v=7.0"></script>
     <link rel="expect" href="#page-end" blocking="render" />
   </head>
@@ -56,1012 +55,121 @@
         }
       } catch (e) {}
     </script>
-    <div id="topbar"></div>
-    <main class="container">
-      <div id="course-head" data-tab="homework"></div>
-      <div id="page" class="stack" style="gap: 22px"></div>
-    </main>
+    <div class="phone">
+      <main class="phone-main" style="gap: 14px" id="page"></main>
+    </div>
 
     <script src="../js/config.js?v=7.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../js/api-supabase.js?v=7.0"></script>
     <script src="../js/ai.js?v=7.2"></script>
     <script src="../js/files.js?v=7.0"></script>
-    <script src="../js/csv.js?v=7.0"></script>
-    <script src="../js/printer.js?v=7.0"></script>
     <script src="../js/ui.js?v=7.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
     <script src="../js/curtain.js?v=7.0"></script>
     <script src="../js/motion.js?v=7.0"></script>
+    <script src="../js/printer.js?v=7.0"></script>
     <script>
       // =============================================================================
-      // The homework page's code.
+      // The student homework page's code.
       // =============================================================================
       (async () => {
-        renderTopbar();
+        const me = requireRole("student");
+        renderStudentNav("courses");
         const course = await getCourse();
-        if (!course) {
-          $("#page").innerHTML =
-            '<p class="muted">No courses yet. <a href="courses.html">Create one</a>.</p>';
-          return;
-        }
+        const a = await API.getAssignment(param("a"));
+        let file = null,
+          fileText = "",
+          reading = null;
 
         // =============================================================================
-        // The assignment to show, from ?a= in the address (none means the list of
-        // assignments).
+        // Shows the assignment, the hand-in form (or what was already handed in), and the
+        // review when it is ready.
         // =============================================================================
-        const aid = param("a");
-
-        // =============================================================================
-        // x out of max as a whole percent.
-        // =============================================================================
-        const pct = (x, max) => (max ? Math.round((x / max) * 100) : 0);
-
-        // =============================================================================
-        // The highest score an assignment can get.
-        // =============================================================================
-        const maxOf = (a) => a.rubric.reduce((x, y) => x + y.points, 0);
-
-        // =============================================================================
-        // A short form of a link for tables: "owner/repo" for GitHub, otherwise the start of
-        // the address.
-        // =============================================================================
-        const shortLink = (u) => {
-          const r = AI.parseRepo(u);
-          return r
-            ? `${r.owner}/${r.repo}`
-            : String(u)
-                .replace(/^https?:\/\/(www\.)?/, "")
-                .slice(0, 34);
-        };
-
-        // =============================================================================
-        // A handed-in file for the AI reviewer. A scanned PDF has no text inside, so the file
-        // itself goes to Gemini instead of its text.
-        // =============================================================================
-        async function fileOf(s) {
-          if (!s.filePath || s.kind !== "pdf" || (s.text || "").length >= 200)
-            return null;
-          try {
-            const blob = await (
-              await fetch(await API.homeworkURL(s.filePath))
-            ).blob();
-            return new File([blob], s.fileName || "work.pdf", {
-              type: "application/pdf",
-            });
-          } catch (e) {
-            return null;
-          }
-        }
-
-        // =============================================================================
-        // Reviews one handed-in work with the AI and saves the review (or the error).
-        // =============================================================================
-        async function reviewOne(a, s, link, onStep) {
-          await API.setSubmission(s.id, { status: "reviewing", error: null });
-          try {
-            const file = await fileOf(s);
-            const review = await AI.reviewSubmission(
-              a,
-              { text: file ? "" : s.text, file, link: link || s.link },
-              onStep,
-            );
-            await API.setSubmission(s.id, {
-              review,
-              status: "reviewed",
-              error: null,
-            });
-            return true;
-          } catch (e) {
-            await API.setSubmission(s.id, {
-              status: s.review ? "reviewed" : "error",
-              error: AI.friendly(e),
-            });
-            return false;
-          }
-        }
-
-        // =============================================================================
-        // Compares each reviewed student with the rest of the class. Classmates stay anonymous
-        // inside the AI's answer.
-        // =============================================================================
-        async function compareAll(a, onlyId) {
-          const subs = (await API.listSubmissions(a.id)).filter(
-            (s) => s.review,
-          );
-          if (subs.length < 3) return 0;
-          const max = maxOf(a);
-          // The parts of a review the comparison needs.
-          const brief = (s) => ({
-            total: API.totalOf(s.review),
-            max,
-            approach: s.review.approach,
-            strengths: s.review.strengths,
-            improvements: s.review.improvements,
-          });
-          let n = 0;
-          for (const s of subs) {
-            if (onlyId ? s.id !== onlyId : s.comparison?.n === subs.length - 1)
-              continue;
-            const others = subs.filter((x) => x.id !== s.id).slice(0, 60);
-            const labels = Object.fromEntries(
-              others.map((x, i) => ["P" + (i + 1), x.id]),
-            );
-            try {
-              const c = await AI.compareWithClass(
-                a,
-                brief(s),
-                others.map((x, i) => ({ label: "P" + (i + 1), ...brief(x) })),
-              );
-              await API.setSubmission(s.id, {
-                comparison: { ...c, labels, n: others.length, at: API.now() },
-              });
-              n++;
-            } catch (e) {
-              toast(AI.friendly(e));
-              break;
-            }
-          }
-          return n;
-        }
-
-        // =============================================================================
-        // Work handed in by students waits for the lecturer's page to review it, one at a
-        // time. This is true while one is being reviewed.
-        // =============================================================================
-        let reviewing = false;
-
-        // =============================================================================
-        // Reviews any work that is waiting, when this browser has the AI set up.
-        // =============================================================================
-        async function reviewWaiting(assignments) {
-          if (!API.isRemote || reviewing || !AI.ready()) return;
-          reviewing = true;
-          try {
-            for (const a of assignments) {
-              const list = await API.listHwStudents(a.id).catch(() => []);
-              for (const s of await API.listSubmissions(a.id)) {
-                if (s.status !== "reviewing" || s.review) continue;
-                const row = list.find((h) => h.key === s.email);
-                if (!s.text && !s.filePath && !(s.link || row?.link)) continue;
-                await reviewOne(a, s, s.link || row?.link);
-              }
-            }
-          } finally {
-            reviewing = false;
-          }
-        }
-
-        // =============================================================================
-        // The list of assignments with their numbers, and the "New assignment" form.
-        // =============================================================================
-        async function renderList() {
-          const list = await API.listAssignments(course.id);
-          const rosterSize = (await API.getRoster(course.id)).filter(
-            (s) => s.status !== "request",
-          ).length;
-          const stats = await Promise.all(
-            list.map((a) => API.classStats(a.id)),
-          );
-          const counts = await Promise.all(
-            list.map(async (a) => (await API.listSubmissions(a.id)).length),
-          );
-          const listed = await Promise.all(
-            list.map(
-              async (a) =>
-                (await API.listHwStudents(a.id).catch(() => [])).length,
-            ),
-          );
-          reviewWaiting(list);
-          $("#page").innerHTML = `
-      <div class="row wrap" style="justify-content:space-between; align-items:center">
-        <h2 class="section-title">Homework</h2>
-        <button class="btn" id="ai-btn"></button>
-      </div>
-      <div class="split">
-        <section class="main table-card">
-          <div class="table-scroll"><table>
-            <thead><tr><th>Assignment</th><th>Due</th><th>Handed in</th><th>Average</th><th></th></tr></thead>
-            <tbody>${
-              list.length
-                ? list
-                    .map((a, i) => {
-                      const st = stats[i];
-                      return `<tr class="clickable" data-open="${a.id}" tabindex="0">
-                <td style="font-weight:600" dir="auto">${esc(a.title)}${a.briefName ? ` <span class="chip" title="${esc(a.briefName)}">${icon("file", 12)} PDF</span>` : ""}</td><td class="muted">${esc(a.due || "-")}</td>
-                <td>${counts[i]} / ${listed[i] || rosterSize}</td><td>${st.avg != null ? Math.round(st.avg * 10) / 10 + " / " + st.max : "-"}</td>
-                <td style="text-align:right"><a class="btn" href="?course=${course.code}&a=${a.id}">Open</a></td></tr>`;
-                    })
-                    .join("")
-                : `<tr><td colspan="5" class="muted" style="padding:28px 16px">No assignments yet. Create one on the right.</td></tr>`
-            }</tbody>
-          </table></div>
-        </section>
-
-        <aside class="side card stack" style="padding:24px; gap:14px">
-          <h2 style="font-size:19px">New assignment</h2>
-          <form class="stack" style="gap:12px" id="new-a">
-            <label class="field">Name<input id="a-title" placeholder="e.g. Ex2: Teaching tool design" required dir="auto"></label>
-            <label class="dropzone" for="a-file" style="cursor:pointer;padding:12px">
-              <div style="flex:1;min-width:150px"><p style="font-weight:600" id="a-file-name">The assignment (PDF)</p>
-                <p class="small muted" id="a-file-sub">The questions students answer. Students can open it; the AI reads it when reviewing.</p></div>
-              <span class="btn">Choose</span>
-              <input type="file" id="a-file" class="sr-only" accept="application/pdf,.pdf">
-            </label>
-            <label class="field">Due date<input id="a-due" type="date"></label>
-            <details><summary class="small" style="cursor:pointer;font-weight:600">Notes for students (optional, or instead of a PDF)</summary>
-              <textarea id="a-instr" class="input" style="height:80px;padding:10px 12px;resize:vertical;margin-top:8px" dir="auto" placeholder="Anything not in the PDF"></textarea></details>
-            <p class="small muted">No rubric to fill in: the AI reads the assignment PDF, finds its requirements and grades each student against them.</p>
-            <fieldset class="stack" style="gap:6px;border:0;padding:0;margin:0">
-              <legend class="small" style="font-weight:600;margin-bottom:6px">Students</legend>
-              <label class="row small" style="gap:8px"><input type="radio" name="a-who" value="course" checked> Everyone on the course list</label>
-              <label class="row small" style="gap:8px"><input type="radio" name="a-who" value="later"> I'll import a list (CSV / Excel) or add them</label>
-            </fieldset>
-            <button class="btn btn-dark btn-lg" id="a-create">Create assignment</button>
-          </form>
-        </aside>
-      </div>`;
-          // Updates the text of the AI settings button.
-          const upd = () => setText($("#ai-btn"), aiStatusText());
-          $("#ai-btn").addEventListener("click", () => openAISettings(upd));
-          upd();
-          $all("[data-open]").forEach((tr) =>
-            tr.addEventListener("click", (e) => {
-              if (e.target.tagName !== "A")
-                Curtain.go(
-                  `homework.html?course=${course.code}&a=${tr.dataset.open}`,
-                );
-            }),
-          );
-
-          let brief = null,
-            briefText = "";
-          $("#a-file").addEventListener("change", async (e) => {
-            brief = e.target.files[0] || null;
-            briefText = "";
-            setText(
-              $("#a-file-name"),
-              brief ? brief.name : "The assignment (PDF)",
-            );
-            if (!brief) return;
-            setText($("#a-file-sub"), "Reading…");
-            try {
-              const r = await Files.pdfText(brief);
-              briefText = r.text;
-              setText(
-                $("#a-file-sub"),
-                `${r.pages} page${r.pages === 1 ? "" : "s"}${briefText.length < 200 ? ", scanned (no text the AI can read)" : ""}`,
-              );
-            } catch (err) {
-              setText($("#a-file-sub"), "This PDF couldn't be read");
-            }
-            if (!$("#a-title").value.trim())
-              $("#a-title").value = brief.name
-                .replace(/\.pdf$/i, "")
-                .replace(/[_-]+/g, " ");
-          });
-          $("#new-a").addEventListener("submit", async (e) => {
-            e.preventDefault();
-            $("#a-create").disabled = true;
-            setText($("#a-create"), brief ? "Uploading the PDF…" : "Creating…");
-            try {
-              if (!brief && !$("#a-instr").value.trim()) {
-                toast(
-                  "Add the assignment PDF (or write what students should do), so the AI knows what to check",
-                );
-                return;
-              }
-              const rubric = [];
-              const res = await API.createAssignment(course.id, {
-                title: $("#a-title").value,
-                due: $("#a-due").value,
-                instructions: $("#a-instr").value,
-                rubric,
-                brief,
-                briefText,
-              });
-              if (!res.ok) return toast(res.error);
-              if (res.warning) toast(res.warning);
-              if ($("input[name=a-who]:checked").value === "course") {
-                const roster = (await API.getRoster(course.id)).filter(
-                  (s) => s.status !== "request",
-                );
-                if (roster.length)
-                  await API.addHwStudents(
-                    res.assignment.id,
-                    roster.map((s) => ({
-                      email: s.email,
-                      name: s.name,
-                      group: s.group,
-                    })),
-                  );
-              }
-              Curtain.go(
-                `homework.html?course=${course.code}&a=${res.assignment.id}`,
-              );
-            } finally {
-              $("#a-create").disabled = false;
-              setText($("#a-create"), "Create assignment");
-            }
-          });
-        }
-
-        // =============================================================================
-        // Who did the work together. Nothing is shown for work done alone. Two or more
-        // different people count as "together" when they wrote commits in the student's
-        // repository, or when the work itself names them ("by X and Y"). One person written
-        // two ways ("dniel1754-hub", "Daniel") counts once. AI tools, the lecturer, and names
-        // that also appear in the assignment (a template's author) never count.
-        // =============================================================================
-        const keyOf = (n) =>
-          String(n || "")
-            .toLowerCase()
-            .replace(/\(.*?\)/g, " ")
-            .replace(/@.*/, "")
-            .replace(/[^\p{L}\p{N}]+/gu, "");
-        const stemOf = (n) =>
-          (String(n || "")
-            .toLowerCase()
-            .match(/\p{L}+/u) || [""])[0];
-        const alike = (x, y) =>
-          x.k.includes(y.k) ||
-          y.k.includes(x.k) ||
-          (x.s.length >= 4 &&
-            y.s.length >= 4 &&
-            (x.s.startsWith(y.s) || y.s.startsWith(x.s)));
-        const samePerson = (p, q) =>
-          p.ids.some((x) => q.ids.some((y) => alike(x, y)));
-        const person = (aliases, name) => ({
-          name,
-          ids: aliases
-            .filter(Boolean)
-            .map((x) => ({ k: keyOf(x), s: stemOf(x) }))
-            .filter((x) => x.k.length >= 3),
-        });
-        const repoPeople = new Map();
-        function teamOf(rv, a, r) {
-          const known = keyOf(
-              `${a?.briefText || ""} ${a?.instructions || ""} ${a?.title || ""}`,
-            ),
-            staff = keyOf(course.lecturerEmail);
-          const tool =
-            /^(claude|claudecode|anthropic|copilot|githubcopilot|chatgpt|openai|gemini|cursor|codex|devin|github|githubactions|dependabot)$/;
-          const outsider = (p) =>
-            p.ids.some(
-              (x) =>
-                tool.test(x.k) ||
-                (x.k.length >= 5 && known.includes(x.k)) ||
-                (staff && x.k === staff),
-            );
-          const collect = (list) => {
-            const out = [];
-            for (const p of list) {
-              if (!p.ids.length || outsider(p)) continue;
-              const twin = out.find((q) => samePerson(p, q));
-              if (twin) twin.ids.push(...p.ids);
-              else out.push(p);
-            }
-            return out;
-          };
-          const me = person([r.email, r.name], r.label);
-          const pick = (list, where) =>
-            list.length >= 2 && list.some((p) => !samePerson(p, me))
-              ? {
-                  names: list.map((p) =>
-                    samePerson(p, me) ? me.name : p.name,
-                  ),
-                  where,
-                }
-              : null;
-          const committers = rv?.people || repoPeople.get(r.link) || [];
-          const fromRepo = collect(
-            committers.map((c) =>
-              person(
-                [c.login, c.name],
-                c.name && c.login
-                  ? `${c.name} (${c.login})`
-                  : c.name || c.login,
-              ),
-            ),
-          );
-          const fromWork =
-            rv?.team?.alone === true
-              ? []
-              : collect(
-                  (rv?.team?.names || []).map((n) => {
-                    const t = String(n)
-                      .replace(/\(.*?\)/g, "")
-                      .trim();
-                    return person([t], t);
-                  }),
-                );
-          return (
-            pick(fromRepo, "repository commits") ||
-            pick(fromWork, rv?.team?.where || "")
-          );
-        }
-
-        // =============================================================================
-        // The state of the assignment page: the student whose review is open, whether a redraw
-        // or a long job (review all, compare) is running, the table filter, and the last data
-        // drawn.
-        // =============================================================================
-        let selected = null,
-          busy = false,
-          running = false,
-          filter = "all",
-          last = null;
-
-        // =============================================================================
-        // Redraws the assignment page, never two at once.
-        // =============================================================================
-        async function renderAssignment() {
-          if (busy) return;
-          busy = true;
-          try {
-            await drawAssignment();
-          } finally {
-            busy = false;
-          }
-        }
-
-        // =============================================================================
-        // The table's rows: the assignment's own student list, plus anyone who handed in
-        // without being on it, each with what they handed in.
-        // =============================================================================
-        async function people(a) {
-          const [list, subs, roster] = await Promise.all([
-            API.listHwStudents(a.id).catch(() => []),
-            API.listSubmissions(a.id),
-            API.getRoster(course.id),
-          ]);
-          const byEmail = new Map(roster.map((r) => [r.email, r]));
-          const subOf = new Map(subs.map((s) => [s.email, s]));
-          const rows = list.map((h) => {
-            const sub = subOf.get(h.key) || null,
-              r = byEmail.get(h.email);
-            return {
-              key: h.key,
-              hw: h,
-              sub,
-              email: h.email,
-              name: h.name || r?.name || "",
-              group: h.group || r?.group || "",
-              link: sub?.link || h.link,
-              extra: sub?.extra || h.extra,
-            };
-          });
-          subs
-            .filter((s) => !list.some((h) => h.key === s.email))
-            .forEach((s) => {
-              const r = byEmail.get(s.email);
-              rows.push({
-                key: s.email,
-                hw: null,
-                sub: s,
-                email: s.email.startsWith("row-") ? "" : s.email,
-                name: r?.name || "",
-                group: r?.group || "",
-                link: s.link,
-                extra: s.extra,
-              });
-            });
-          rows.forEach(
-            (x) => (x.label = x.name || x.email.split("@")[0] || "Unnamed"),
-          );
-          rows.forEach((x) => (x.team = teamOf(x.sub?.review, a, x)));
-          rows.sort((x, y) => x.label.localeCompare(y.label, "he"));
-          return rows;
-        }
-
-        // =============================================================================
-        // Draws one assignment: its details and PDF, the table of students (status, score,
-        // similarity), the buttons for reviewing, comparing and printing, and the class
-        // insights.
-        // =============================================================================
-        async function drawAssignment() {
-          const a = await API.getAssignment(aid);
+        async function render() {
           if (!a) {
             $("#page").innerHTML =
-              `<p class="muted">Assignment not found. <a href="homework.html?course=${course.code}">Back</a></p>`;
+              `<p class="muted">Assignment not found.</p><a href="course.html?course=${course.code}&tab=homework">Back</a>`;
             return;
           }
-          const rows = await people(a);
-          const st = await API.classStats(a.id);
-          reviewWaiting([a]);
-          const handed = rows.filter((r) => r.sub || r.link);
-          const docs = rows.map((r) => r.sub?.text || "");
-          const sim =
-            docs.filter(Boolean).length > 1 ? AI.similarity(docs) : [];
-          rows.forEach((r, i) => {
-            let best = -1,
-              j = -1;
-            (sim[i] || []).forEach((v, k) => {
-              if (k !== i && docs[k] && v > best) {
-                best = v;
-                j = k;
-              }
-            });
-            r.closest =
-              docs[i] && j >= 0 ? { score: best, name: rows[j].label } : null;
-          });
-          if (a.insights?.similar)
-            rows.forEach((r) => {
-              const p = a.insights.similar.pairs.find(
-                (x) => x.a === r.key || x.b === r.key,
-              );
-              const other =
-                p && rows.find((x) => x.key === (p.a === r.key ? p.b : p.a));
-              r.closest =
-                p && other && p.verdict !== "independent"
-                  ? { score: p.score, name: other.label, code: true }
-                  : null;
-            });
-          // A warning label when a student's work is very similar to someone else's. Shared code counts a
-          // lot from 50%; a plain text match needs 85%.
-          const simChip = (c) =>
-            !c
-              ? ""
-              : c.score >= (c.code ? 0.5 : 0.85)
-                ? `<span class="chip warn" title="Very similar to ${esc(c.name)}">≈ ${esc(c.name)} ${Math.round(c.score * 100)}%</span>`
-                : c.score >= (c.code ? 0.3 : 0.7)
-                  ? `<span class="chip" title="Similar to ${esc(c.name)}">~ ${Math.round(c.score * 100)}%</span>`
-                  : "";
-          // What a student's row shows: nothing yet, a link only, handed in, being reviewed, reviewed, or an
-          // error.
-          const statusOf = (r) =>
-            !r.sub && !r.link
-              ? '<span class="muted small">Nothing yet</span>'
-              : !r.sub
-                ? '<span class="chip">Link only</span>'
-                : r.sub.review && r.sub.status !== "reviewing"
-                  ? '<span class="chip ok">Reviewed</span>'
-                  : r.sub.status === "reviewing" && r.sub.review
-                    ? '<span class="chip accent">Reviewing again…</span>'
-                    : r.sub.status === "error"
-                      ? '<span class="chip warn">Review failed</span>'
-                      : r.sub.text || r.sub.filePath || r.link
-                        ? '<span class="chip accent">Waiting for review</span>'
-                        : '<span class="chip">Handed in</span>';
-          const shown = rows.filter(
-            (r) =>
-              filter === "all" ||
-              (filter === "missing"
-                ? !r.sub && !r.link
-                : filter === "todo"
-                  ? (r.sub || r.link) && !r.sub?.review
-                  : !!r.sub?.review),
-          );
-          const groups = [...new Set(rows.map((r) => r.group).filter(Boolean))];
-
-          const sig = JSON.stringify([
-            a,
-            rows.map((r) => [
-              r.key,
-              r.label,
-              r.link,
-              r.extra,
-              r.group,
-              r.sub?.id,
-              r.sub?.status,
-              r.sub?.review,
-              r.sub?.comparison,
-              r.sub?.error,
-              r.sub?.filePath,
-            ]),
-            st,
-            filter,
+          const [sub, row] = await Promise.all([
+            API.mySubmission(a.id, me.email),
+            API.myHwRow ? API.myHwRow(a.id, me.email).catch(() => null) : null,
           ]);
-          if (sig === drawAssignment.sig && $("#review")) return;
-          drawAssignment.sig = sig;
-          const keepScroll = $("#review")?.scrollTop || 0;
-
+          const link = sub?.link || row?.link || "";
           $("#page").innerHTML = `
-      <div class="stack" style="gap:6px">
-        <a class="back-link" href="homework.html?course=${course.code}">${icon("back", 16)}All homework</a>
-        <div class="row wrap" style="justify-content:space-between">
-          <h2 class="section-title" dir="auto">${esc(a.title)}</h2>
-          <div class="row wrap" style="gap:8px">
-            <button class="btn" id="ai-btn"></button>
-            <button class="btn btn-primary" id="review-all">${icon("spark", 16)} Review all</button>
-            <button class="btn" id="compare-all">${icon("user", 16)} Compare students</button>
-            <button class="btn" id="insights-btn">Class insights</button>
-            <button class="btn" id="print-all">${icon("print", 16)} Print</button>
-            <button class="icon-btn" aria-label="Delete assignment" id="del-a">${icon("trash", 18, "#68686D")}</button>
-          </div>
-        </div>
-        <div class="row wrap" style="gap:8px;align-items:center">
-          ${a.briefPath ? `<button class="chip" id="brief-open" style="cursor:pointer">${icon("file", 12)} ${esc(a.briefName || "Assignment PDF")}</button>` : ""}
-          <label class="chip" style="cursor:pointer" for="brief-file">${icon("upload", 12)} ${a.briefPath ? "Replace PDF" : "Add the assignment PDF"}</label>
-          <input type="file" id="brief-file" class="sr-only" accept="application/pdf,.pdf">
-          <span class="small muted">Due ${esc(a.due || "-")}${a.briefPath ? "" : " · add the PDF so the AI knows the requirements"}</span>
-        </div>
-        <p class="small" id="run-line" style="color:var(--blue);min-height:18px">${esc(runMsg)}</p>
+      <div class="row" style="gap:8px">
+        <a class="icon-btn" href="course.html?course=${course.code}&tab=homework" aria-label="Back" style="margin-left:-10px">${icon("back", 22)}</a>
+        <div><h1 style="font-size:19px" dir="auto">${esc(a.title)}</h1><p class="small muted">${esc(course.name)}, due ${esc(a.due || "-")}</p></div>
       </div>
 
-      <div class="stat-grid">
-        <div class="stat"><p class="small muted">Handed in</p><p class="num">${handed.length}</p><p class="small muted">of ${rows.length} on the list</p></div>
-        <div class="stat"><p class="small muted">Reviewed</p><p class="num">${st.n}</p><p class="small muted">by the AI</p></div>
-        <div class="stat"><p class="small muted">Average</p><p class="num">${st.avg != null ? Math.round(st.avg * 10) / 10 : "-"}</p><p class="small muted">out of ${st.max}</p></div>
-        <div class="stat"><p class="small muted">Shared-code pairs</p><p class="num">${a.insights?.similar ? a.insights.similar.pairs.filter((p) => p.score >= 0.5 && p.verdict !== "independent").length : "-"}</p><p class="small muted">${a.insights?.similar ? "≥ 50% of their own code" : "press Compare students"}</p></div>
-      </div>
-
+      <div class="cols even"><div class="col">
       ${
-        a.rubric.length > 1 && st.n
-          ? `<section class="card stack" style="gap:10px">
-        <h2 style="font-size:17px">Average per rubric item</h2>
-        ${a.rubric
-          .map((r) => {
-            const v = st.perCriterion[r.name];
-            return `<div class="pbar light">
-          <span>${esc(r.name)}</span><span style="font-weight:700">${v != null ? Math.round(v * 10) / 10 : "-"} / ${r.points}</span>
-          <div class="track"><div style="width:${v != null ? pct(v, r.points) : 0}%"></div></div></div>`;
-          })
-          .join("")}
-      </section>`
+        a.briefPath
+          ? `<button class="dropzone" style="cursor:pointer;padding:12px;text-align:left;width:100%" id="brief-open">
+          <div style="flex:1;min-width:150px"><p style="font-weight:600">${icon("file", 16)} The assignment</p><p class="small muted">${esc(a.briefName || "PDF")}</p></div>
+          <span class="btn">Open</span></button>`
+          : ""
+      }
+      ${
+        a.instructions
+          ? `<section class="card stack" style="padding:16px;gap:6px"><p class="small" style="font-weight:700">Notes from the lecturer</p>
+        <p class="small" style="white-space:pre-wrap;color:var(--ink-2)" dir="auto">${esc(a.instructions)}</p></section>`
           : ""
       }
 
-      ${
-        a.insights?.similar
-          ? (() => {
-              // The similar pairs found, and the name to show for a student key.
-              const sim = a.insights.similar,
-                nm = (k) => rows.find((r) => r.key === k)?.label || k;
-              const tag = {
-                copied: '<span class="chip warn">Likely copied</span>',
-                similar: '<span class="chip">Similar</span>',
-                independent: '<span class="chip ok">Independent</span>',
-              };
-              return `<section class="card stack" style="gap:10px">
-          <div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="font-size:17px">Shared code</h2>
-            <span class="small muted">${sim.n} students compared · ${fmtDate(sim.at)}</span></div>
-          ${
-            sim.pairs.length
-              ? sim.pairs
-                  .map(
-                    (
-                      p,
-                    ) => `<div class="row wrap" style="gap:10px;align-items:baseline;padding:8px 0;border-top:1px solid var(--line)">
-              <b style="min-width:52px">${Math.round(p.score * 100)}%</b>
-              <span dir="auto"><button class="link-btn" data-pick="${esc(p.a)}">${esc(nm(p.a))}</button> ↔ <button class="link-btn" data-pick="${esc(p.b)}">${esc(nm(p.b))}</button></span>
-              ${p.verdict ? tag[p.verdict] || "" : ""}
-              ${p.why ? `<span class="small muted" style="flex:1 1 260px" dir="auto">${esc(p.why)}</span>` : ""}
-            </div>`,
-                  )
-                  .join("")
-              : `<p class="small muted">No two students share a meaningful amount of their own code.</p>`
-          }
-          <p class="small muted">% = how much of the smaller one's own code (not the assignment's) also appears in the other. The same idea written differently doesn't count.</p>
-        </section>`;
-            })()
-          : ""
-      }
+      <p class="small muted" style="padding:0 4px">Your work is checked against the requirements in the assignment.</p>
+      </div><div class="col">
+      <div id="result"></div>
 
-      ${
-        a.insights?.common_mistakes || a.insights?.what_went_well
-          ? `<section class="card stack" style="gap:10px">
-        <h2 style="font-size:17px">Class insights <span class="small muted" style="font-family:var(--font);font-weight:400">· ${fmtDate(a.insights.at)}</span></h2>
-        ${(a.insights.common_mistakes || []).length ? `<p class="small" style="font-weight:700">Common mistakes</p><ul style="margin:0;padding-inline-start:20px">${a.insights.common_mistakes.map((m) => `<li>${esc(m.issue)} <span class="muted">(${esc(m.how_many || "")})</span></li>`).join("")}</ul>` : ""}
-        ${(a.insights.what_went_well || []).length ? `<p class="small" style="font-weight:700">What went well</p><ul style="margin:0;padding-inline-start:20px">${a.insights.what_went_well.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>` : ""}
-        ${(a.insights.teaching_tips || []).length ? `<p class="small" style="font-weight:700">Ideas for the next lecture</p><ul style="margin:0;padding-inline-start:20px">${a.insights.teaching_tips.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>` : ""}
-      </section>`
-          : ""
-      }
+      <section class="card stack" style="padding:16px;gap:12px">
+        <p style="font-weight:700">${sub ? "Hand in a new version" : "Hand in your work"}</p>
+        ${sub ? `<p class="small muted">Handed in: ${esc(sub.fileName || (sub.link ? "a link" : "text"))}, ${fmtDate(sub.createdAt)}${sub.filePath ? ` · <a href="#" id="my-file">open</a>` : ""}</p>` : ""}
+        <label class="dropzone" for="hw-file" style="cursor:pointer;padding:12px">
+          <div style="flex:1;min-width:150px"><p style="font-weight:600" id="file-name">${file ? esc(file.name) : "Choose a file"}</p>
+            <p class="small muted">PDF, Word (.docx), notebook, text or code</p></div>
+          <span class="btn">Choose</span>
+          <input type="file" id="hw-file" class="sr-only" accept="${Files.ACCEPT}">
+        </label>
+        <label class="field">Link to your repository (GitHub)<input class="input" id="hw-link" placeholder="https://github.com/you/your-repo" value="${esc(link)}" dir="ltr"></label>
+        <label class="field">or paste your answer<textarea id="hw-text" class="input" style="height:90px;padding:10px 12px;resize:vertical" dir="auto"></textarea></label>
+        <p class="small muted">The review reads your file and your repository (it must be public). Only your work is sent, not your name or email.</p>
+        <button class="btn btn-primary btn-lg" id="submit">Hand in & get a review</button>
+      </section>
+      </div></div>`;
 
-      <div class="row wrap" style="gap:8px;align-items:center;justify-content:space-between">
-        <div class="row wrap" style="gap:8px" role="group" aria-label="Show">
-          ${[
-            ["all", "Everyone"],
-            ["missing", "Nothing yet"],
-            ["todo", "Not reviewed"],
-            ["done", "Reviewed"],
-          ]
-            .map(
-              ([k, l]) =>
-                `<button type="button" class="btn btn-pill" data-filter="${k}" aria-pressed="${filter === k}">${l}</button>`,
-            )
-            .join("")}
-        </div>
-        <div class="row wrap" style="gap:8px">
-          <label class="btn" for="imp-file" style="cursor:pointer">${icon("upload", 16)} Import list (CSV / Excel)</label>
-          <input type="file" id="imp-file" class="sr-only" accept=".csv,.xlsx,.xls,text/csv">
-          <button type="button" class="btn" id="add-course">Add the course list</button>
-          <button type="button" class="btn" id="add-one">${icon("plus", 16)} Add a student</button>
-        </div>
-      </div>
-      <form class="card row wrap hidden" style="gap:8px;padding:14px;align-items:flex-end" id="one-form">
-        <label class="field" style="flex:1 1 160px">Name<input class="input" id="o-name" dir="auto" required></label>
-        <label class="field" style="flex:1 1 200px">Email<input class="input" id="o-email" type="email" placeholder="optional"></label>
-        <label class="field" style="flex:0 1 110px">Group<input class="input" id="o-group"></label>
-        <label class="field" style="flex:2 1 240px">Link (GitHub…)<input class="input" id="o-link" placeholder="optional"></label>
-        <button class="btn btn-dark">Add</button>
-      </form>
-
-      <div class="split">
-        <section class="main table-card">
-          <div class="table-scroll"><table>
-            <thead><tr><th>Student</th>${groups.length ? "<th>Group</th>" : ""}<th>Work</th><th>Score</th><th>Similarity</th><th>Status</th></tr></thead>
-            <tbody>${
-              shown.length
-                ? shown
-                    .map(
-                      (r) => `
-              <tr class="clickable ${r.key === selected ? "selected" : ""}" data-key="${esc(r.key)}" tabindex="0">
-                <td><span dir="auto" style="font-weight:600">${esc(r.label)}</span>${r.email && r.name ? `<br><span class="small muted">${esc(r.email)}</span>` : ""}</td>
-                ${groups.length ? `<td class="muted">${esc(r.group || "-")}</td>` : ""}
-                <td><div class="row wrap" style="gap:6px">
-                  ${r.link ? `<a class="chip" href="${esc(r.link)}" target="_blank" rel="noopener" data-stop title="${esc(r.link)}">${icon("link", 12)} ${esc(shortLink(r.link))}</a>` : ""}
-                  ${r.sub?.filePath ? `<button class="chip" data-file="${esc(r.key)}" data-stop>${icon("file", 12)} ${esc((r.sub.fileName || "file").slice(0, 22))}</button>` : r.sub?.text && !r.sub.filePath ? `<span class="chip">Text</span>` : ""}
-                  <label class="chip" style="cursor:pointer" data-stop title="Upload this student's work">${icon("upload", 12)}${r.sub?.filePath ? "" : " Upload"}<input type="file" class="sr-only" data-up="${esc(r.key)}" accept="${Files.ACCEPT}"></label>
-                </div></td>
-                <td style="font-weight:600">${r.sub?.review ? API.totalOf(r.sub.review) + " / " + st.max : "-"}</td>
-                <td>${simChip(r.closest)}</td>
-                <td>${statusOf(r)}</td>
-              </tr>`,
-                    )
-                    .join("")
-                : `<tr><td colspan="6" class="muted" style="padding:28px 16px">${rows.length ? "Nobody here." : "No students on this assignment yet. Import the list from your form (CSV / Excel), add the course list, or add students one by one."}</td></tr>`
-            }</tbody>
-          </table></div>
-        </section>
-        <aside class="side card stack" style="gap:12px" id="review"><p class="muted small">Click a student to see their work and review.</p></aside>
-      </div>`;
-
-          // Updates the text of the AI settings button.
-          const upd = () => setText($("#ai-btn"), aiStatusText());
-          $("#ai-btn").addEventListener("click", () => openAISettings(upd));
-          upd();
-          $all("[data-filter]").forEach((b) =>
-            b.addEventListener("click", () => {
-              filter = b.dataset.filter;
-              renderAssignment();
-            }),
-          );
-          $all("[data-key]").forEach((tr) =>
-            tr.addEventListener("click", (e) => {
-              if (e.target.closest("[data-stop]")) return;
-              selected = tr.dataset.key;
-              $all("tr[data-key]").forEach((x) =>
-                x.classList.toggle("selected", x === tr),
-              );
-              if (last) renderReview(last.a, last.rows, last.st);
-              $("#review").scrollTop = 0;
-            }),
-          );
-          $all("[data-file]").forEach((b) =>
-            b.addEventListener("click", async () => {
-              const r = rows.find((x) => x.key === b.dataset.file);
-              openFile(r.sub.filePath);
-            }),
-          );
-          $all("[data-up]").forEach((inp) =>
-            inp.addEventListener("change", async () => {
-              const f = inp.files[0];
-              if (!f) return;
-              const r = rows.find((x) => x.key === inp.dataset.up);
-              await uploadFor(a, r, f);
-            }),
-          );
           $("#brief-open")?.addEventListener("click", () =>
-            openFile(a.briefPath),
+            openPath(a.briefPath),
           );
-          $("#brief-file").addEventListener("change", async (e) => {
-            const f = e.target.files[0];
-            if (!f) return;
-            setRun("Uploading the assignment PDF…");
-            try {
-              const t = (await Files.pdfText(f)).text;
-              await API.setBrief(a.id, course.id, f, t);
-              toast("Assignment PDF saved");
-            } catch (err) {
-              toast(err.message);
-            }
-            setRun("");
-            renderAssignment();
-          });
-          $("#del-a").addEventListener("click", async () => {
-            if (
-              await ask({
-                title: "Delete this assignment?",
-                message:
-                  "All handed-in files and reviews are deleted with it. This can't be undone.",
-                confirm: "Delete assignment",
-                danger: true,
-              })
-            ) {
-              await API.deleteAssignment(a.id);
-              Curtain.go(`homework.html?course=${course.code}`, {
-                dir: "back",
-              });
-            }
-          });
-          $("#insights-btn").addEventListener("click", async () => {
-            const reviewed = rows.filter((r) => r.sub?.review);
-            if (reviewed.length < 2)
-              return toast("Needs at least 2 reviewed students");
-            if (!AI.ready()) return openAISettings(upd);
-            setText($("#insights-btn"), "Thinking…");
-            try {
-              await API.setInsights(
-                a.id,
-                await AI.classInsights(
-                  a,
-                  reviewed.map((r) => ({
-                    ...r.sub.review,
-                    total: API.totalOf(r.sub.review),
-                    max: st.max,
-                  })),
-                ),
-              );
-              toast("Insights ready");
-            } catch (e) {
-              toast(AI.friendly(e));
-            }
-            renderAssignment();
-          });
-          $("#review-all").addEventListener("click", () => reviewAll(a));
-          $("#compare-all").addEventListener("click", () => compareStudents(a));
-          $all("[data-pick]").forEach((b) =>
-            b.addEventListener("click", () => {
-              selected = b.dataset.pick;
-              $all("tr[data-key]").forEach((x) =>
-                x.classList.toggle("selected", x.dataset.key === selected),
-              );
-              if (last) renderReview(last.a, last.rows, last.st);
-              $("#review").scrollTop = 0;
-            }),
-          );
-          $("#print-all").addEventListener("click", () => printAll(a));
-
-          $("#imp-file").addEventListener("change", async (e) => {
-            const f = e.target.files[0];
-            e.target.value = "";
-            if (!f) return;
-            try {
-              const res = CSV.hwList(await CSV.readTable(f));
-              if (!res.rows.length)
-                return toast(
-                  "No students found in this file (it needs an email or a name column)",
-                );
-              const ok = await ask({
-                title: `Import ${res.rows.length} student${res.rows.length === 1 ? "" : "s"}?`,
-                message: `Emails from "${res.columns.email || "?"}"${res.columns.link ? `, links from "${res.columns.link.slice(0, 50)}"` : ""}${res.columns.extra ? `, extra material from "${res.columns.extra.slice(0, 40)}"` : ""}. Students already on the list get the newer link.${res.issues.length ? ` ${res.issues.length} row(s) skipped.` : ""}`,
-                confirm: "Import",
-              });
-              if (!ok) return;
-              const r = await API.addHwStudents(a.id, res.rows);
-              toast(
-                `${r.added} added${r.updated ? `, ${r.updated} updated` : ""}`,
-              );
-            } catch (err) {
-              toast(err.message || "This file couldn't be read");
-            }
-            renderAssignment();
-          });
-          $("#add-course").addEventListener("click", async () => {
-            const roster = (await API.getRoster(course.id)).filter(
-              (s) => s.status !== "request",
-            );
-            if (!roster.length) return toast("The course list is empty");
-            const r = await API.addHwStudents(
-              a.id,
-              roster.map((s) => ({
-                email: s.email,
-                name: s.name,
-                group: s.group,
-              })),
-            );
-            toast(`${r.added} added from the course list`);
-            renderAssignment();
-          });
-          $("#add-one").addEventListener("click", () => {
-            $("#one-form").classList.toggle("hidden");
-            $("#o-name").focus();
-          });
-          $("#one-form").addEventListener("submit", async (e) => {
+          $("#my-file")?.addEventListener("click", (e) => {
             e.preventDefault();
-            const email = $("#o-email").value.trim();
-            if (email && !API.isValidEmail(email))
-              return toast("That email looks wrong");
-            await API.addHwStudents(a.id, [
-              {
-                name: $("#o-name").value,
-                email: email || null,
-                group: $("#o-group").value,
-                link: $("#o-link").value,
-              },
-            ]);
-            toast("Student added");
-            renderAssignment();
+            openPath(sub.filePath);
           });
-
-          last = { a, rows, st };
-          renderReview(a, rows, st);
-          $("#review").scrollTop = keepScroll;
+          $("#hw-file").addEventListener("change", (e) => {
+            file = e.target.files[0] || null;
+            fileText = "";
+            reading = null;
+            if (!file) return;
+            if (!Files.kindOf(file.name)) {
+              toast("Use a PDF, Word (.docx), notebook, text or code file");
+              file = null;
+            } else if (file.size > 25 * 1024 * 1024) {
+              toast("The file is too big (max 25 MB)");
+              file = null;
+            } else
+              reading = Files.textOf(file)
+                .then((t) => (fileText = t))
+                .catch(() => (fileText = ""));
+            setText($("#file-name"), file ? file.name : "Choose a file");
+          });
+          $("#submit").addEventListener("click", submit);
+          renderResult(sub);
         }
 
         // =============================================================================
-        // One student's review as a clean page for printing.
+        // Opens a file in a new tab through a temporary link.
         // =============================================================================
-        const reviewPrintHTML = (a, r) => {
-          // The review, and a helper that turns a list into HTML bullet points.
-          const rv = r.sub.review,
-            li = (xs) =>
-              `<ul>${xs.map((x) => `<li dir="auto">${esc(x)}</li>`).join("")}</ul>`;
-          return `<h1 dir="auto">${esc(r.label)}</h1>
-      <p class="muted">${esc(r.email || "")}${r.group ? " · group " + esc(r.group) : ""}${r.link ? " · " + esc(r.link) : ""}</p>
-      <h2>${API.totalOf(rv)} / ${maxOf(a)}</h2><p dir="auto">${esc(rv.summary || "")}</p>
-      ${r.team ? `<p dir="auto"><b>Done together:</b> ${esc(r.team.names.join(", "))}</p>` : ""}
-      ${(rv.requirements || []).length ? `<h3>The assignment, point by point</h3><ul>${rv.requirements.map((q) => `<li dir="auto">${{ done: "✓", partial: "◐", missing: "✗" }[q.status] || "·"} ${esc(q.item)}${q.note ? ` <span class="muted">(${esc(q.note)})</span>` : ""}</li>`).join("")}</ul>` : ""}
-      ${(rv.strengths || []).length ? `<h3>Good</h3>${li(rv.strengths)}` : ""}
-      ${(rv.improvements || []).length ? `<h3>To improve</h3>${li(rv.improvements)}` : ""}
-      ${r.sub.comparison?.standing ? `<h3>Compared with the class</h3><p dir="auto">${esc(r.sub.comparison.standing)}</p>` : ""}`;
-        };
-
-        // =============================================================================
-        // Prints every review of the assignment, one per page.
-        // =============================================================================
-        async function printAll(a) {
-          const rows = await people(a),
-            max = maxOf(a);
-          const reviewed = rows.filter((r) => r.sub?.review);
-          const choice = await ask({
-            title: "What should be printed?",
-            message: `${reviewed.length} of ${rows.length} students have a review. "Grades only" is one page with everyone's score; "Everything" adds each student's review on its own page.`,
-            confirm: "Everything",
-            cancel: "Grades only",
-            alt: "grades",
-          });
-          if (!choice) return;
-          const table = `<h1 dir="auto">${esc(a.title)}</h1><p class="muted">${esc(course.name)} · ${reviewed.length} reviewed of ${rows.length}</p>
-      <table><tr><th>Student</th><th>Email</th><th>Group</th><th>Score</th></tr>${rows.map((r) => `<tr><td dir="auto">${esc(r.label)}</td><td>${esc(r.email || "")}</td><td>${esc(r.group || "")}</td><td>${r.sub?.review ? API.totalOf(r.sub.review) + " / " + max : r.sub || r.link ? "not reviewed" : "nothing handed in"}</td></tr>`).join("")}</table>`;
-          const everything = choice === true;
-          const pages = everything
-            ? reviewed
-                .map(
-                  (r) =>
-                    `<div style="break-before:page">${reviewPrintHTML(a, r)}</div>`,
-                )
-                .join("")
-            : "";
-          Printer.open({
-            kicker: "Homework",
-            title: a.title,
-            sub: everything ? "Grades and every review" : "Grades",
-            when: "end",
-            done: "Sent to your printer",
-            rows: rows
-              .slice(0, 14)
-              .map((r) => [
-                r.label,
-                r.sub?.review ? `${API.totalOf(r.sub.review)} / ${max}` : "-",
-              ]),
-            note: `${rows.length} students`,
-            action: () =>
-              Printer.printHTML(`${a.title}, grades`, table + pages),
-          });
-        }
-
-        // =============================================================================
-        // The progress line of a long job. It is kept outside the element so it survives
-        // redraws.
-        // =============================================================================
-        let runMsg = "";
-
-        // =============================================================================
-        // Shows a progress message.
-        // =============================================================================
-        const setRun = (t) => {
-          runMsg = t;
-          const el = $("#run-line");
-          if (el) el.textContent = t;
-        };
-
-        // =============================================================================
-        // Opens a handed-in file in a new tab, through a temporary link.
-        // =============================================================================
-        async function openFile(path) {
+        async function openPath(path) {
           const w = window.open("", "_blank");
           try {
             const url = await API.homeworkURL(path);
@@ -1074,397 +182,160 @@
         }
 
         // =============================================================================
-        // The lecturer hands in work for a student (for example a file the student sent by
-        // email).
+        // Hands in the work: checks that the link is a web address and that there is something
+        // to hand in, then uploads the file with any text and link.
         // =============================================================================
-        async function uploadFor(a, r, f) {
-          if (!Files.kindOf(f.name))
+        async function submit() {
+          const pasted = $("#hw-text").value.trim();
+          const link = $("#hw-link").value.trim();
+          if (link && !/^https?:\/\//i.test(link))
+            return toast("The link should start with https://");
+          if (reading) await reading;
+          const kind = file
+            ? Files.kindOf(file.name) === "pdf"
+              ? "pdf"
+              : "text"
+            : link && !pasted
+              ? "link"
+              : "text";
+          const text = file ? fileText : pasted;
+          if (!file && !link && text.length < 20)
             return toast(
-              "Use a PDF, Word (.docx), notebook, text or code file",
+              "Choose a file, add your repository link or paste your answer",
             );
-          setRun(`Reading ${f.name}…`);
-          let text = "";
-          try {
-            text = await Files.textOf(f);
-          } catch (e) {}
-          setRun(`Uploading ${f.name}…`);
-          const res = await API.submitHomework(a.id, r.key, {
-            file: f,
-            fileName: f.name,
-            kind: Files.kindOf(f.name) === "pdf" ? "pdf" : "text",
+          $("#submit").disabled = true;
+          setText($("#submit"), file ? "Uploading…" : "Handing in…");
+          const res = await API.submitHomework(a.id, me.email, {
+            file: API.isRemote ? file : null,
+            fileName: file?.name || (link && !pasted ? "" : "Pasted text"),
+            kind,
             text,
-            link: r.link,
-            extra: r.extra,
-            byLecturer: true,
+            link,
           });
-          setRun("");
+          $("#submit").disabled = false;
+          setText($("#submit"), "Hand in & get a review");
           if (!res.ok) return toast(res.error);
-          toast("Uploaded");
-          selected = r.key;
-          await renderAssignment();
-          if (AI.ready()) reviewRow(a, r.key);
-        }
-
-        // =============================================================================
-        // Reviews one student: makes sure there is a handed-in work (a link alone is enough),
-        // reviews it, then compares it with the class.
-        // =============================================================================
-        async function reviewRow(a, key) {
-          if (!AI.ready()) return openAISettings();
-          const rows = await people(a),
-            r = rows.find((x) => x.key === key);
-          if (!r) return;
-          let sub = r.sub;
-          if (!sub) {
-            if (!r.link)
-              return toast(
-                "Nothing to review yet: upload the work or add a link",
-              );
-            const res = await API.submitHomework(a.id, r.key, {
-              fileName: "",
-              kind: "link",
-              text: "",
-              link: r.link,
-              extra: r.extra,
-              byLecturer: true,
-            });
-            if (!res.ok) return toast(res.error);
-            sub = res.submission;
-          }
-          AI.setNotifier((m) => setRun(`${r.label}: ${m}`));
-          setRun(`${r.label}: reviewing…`);
-          await renderAssignment();
-          const ok = await reviewOne(a, sub, r.link, (m) =>
-            setRun(`${r.label}: ${m}`),
-          );
-
-          setRun(
-            ok ? `${r.label}: review ready` : `${r.label}: the review failed`,
-          );
-          renderAssignment();
-        }
-
-        // =============================================================================
-        // Reviews every student who handed in work (or a link) and has no review yet, one
-        // after another, showing progress.
-        // =============================================================================
-        async function reviewAll(a) {
-          if (running) return;
-          if (!AI.ready()) return openAISettings();
-          const rows = (await people(a)).filter(
-            (r) => (r.sub || r.link) && !r.sub?.review,
-          );
-          if (!rows.length)
-            return toast("Everyone who handed in work is already reviewed");
-          if (
-            !(await ask({
-              title: `Review ${rows.length} student${rows.length === 1 ? "" : "s"}?`,
-              message:
-                "Each one gets a review of their file and GitHub repository against the assignment's requirements. Keep this tab open: with a free Gemini key it takes about half a minute per student. (Comparing students with each other is the other button.)",
-              confirm: "Start",
-            }))
-          )
-            return;
-          running = true;
-          let done = 0;
+          const sid = res.submission.id,
+            localFile = file;
+          file = null;
+          fileText = "";
+          reading = null;
+          await render();
+          if (API.isRemote || !AI.ready()) return;
           try {
-            for (const r of rows) {
-              setRun(`Reviewing ${done + 1} of ${rows.length}: ${r.label}…`);
-              let sub = r.sub;
-              if (!sub) {
-                const res = await API.submitHomework(a.id, r.key, {
-                  fileName: "",
-                  kind: "link",
-                  text: "",
-                  link: r.link,
-                  extra: r.extra,
-                  byLecturer: true,
-                });
-                if (!res.ok) continue;
-                sub = res.submission;
-              }
-              await reviewOne(a, sub, r.link, (m) =>
-                setRun(
-                  `Reviewing ${done + 1} of ${rows.length}: ${r.label}, ${m}`,
-                ),
-              );
-              done++;
-              if (done % 3 === 0) renderAssignment();
-            }
-            setRun(`Done: ${done} reviewed`);
-          } finally {
-            running = false;
-            renderAssignment();
+            const scanned =
+              localFile &&
+              Files.kindOf(localFile.name) === "pdf" &&
+              text.length < 200;
+            const review = await AI.reviewSubmission(a, {
+              text: scanned ? "" : text,
+              file: scanned ? localFile : null,
+              link,
+            });
+            await API.setSubmission(sid, {
+              review,
+              status: "reviewed",
+              error: null,
+            });
+            toast("Your review is ready");
+          } catch (e) {
+            await API.setSubmission(sid, {
+              status: "error",
+              error: AI.friendly(e),
+            });
           }
+          render();
         }
 
         // =============================================================================
-        // "Compare students": 1) finds copied work with code fingerprints (no AI, instant), 2)
-        // lets the AI look at the most suspicious pairs side by side, 3) tells each reviewed
-        // student where they stand in the class.
+        // Shows the review: score, the requirements checklist, strengths, what to improve, and
+        // where the work stands in the class.
         // =============================================================================
-        async function compareStudents(a) {
-          if (running) return;
-          const rows = (await people(a)).filter((r) => r.sub || r.link);
-          if (rows.length < 2)
-            return toast("Needs at least 2 students with work");
-          const reviewed = rows.filter((r) => r.sub?.review).length;
-          if (
-            !(await ask({
-              title: `Compare ${rows.length} students?`,
-              message: `Looks for copied work (shared code, not just the same idea), asks the AI about the closest pairs${AI.ready() ? "" : " (needs the AI key)"}, and${reviewed >= 3 ? ` tells each of the ${reviewed} reviewed students where they stand in the class` : " (once 3 are reviewed) where each stands in the class"}. Keep this tab open.`,
-              confirm: "Compare",
-            }))
-          )
+        async function renderResult(sub) {
+          if (!sub) return;
+          if (sub.status === "reviewing" && !sub.review) {
+            $("#result").innerHTML =
+              `<section class="card" style="padding:16px"><p style="font-weight:600">Submitted ✓</p><p class="small muted">${API.isRemote ? "Your review appears here when it's ready (usually within a few minutes)." : "Reviewing your work… this takes a few seconds."}</p></section>`;
+            clearTimeout(renderResult.t);
+            renderResult.t = setTimeout(render, 5000);
             return;
-          running = true;
-          try {
-            const items = [],
-              texts = new Map();
-            let k = 0;
-            for (const r of rows) {
-              setRun(`Reading the work: ${++k} of ${rows.length}, ${r.label}…`);
-              let fp = r.sub?.review?.fp;
-              if (!fp) {
-                let text = r.sub?.text || "";
-                try {
-                  text += "\n" + (await AI.repoText(r.link || r.sub?.link));
-                } catch (e) {
-                  if (/limit/i.test(e.message)) {
-                    toast(e.message);
-                    break;
-                  }
-                }
-                texts.set(r.key, text);
-                fp = AI.fingerprint(text);
-                if (r.sub?.review && fp.length)
-                  API.setSubmission(r.sub.id, {
-                    review: { ...r.sub.review, fp },
-                  }).catch(() => {});
-              }
-              if (fp?.length) items.push({ key: r.key, fp });
-            }
-            const pairs = AI.similarWork(
-              items,
-              a.briefText ? AI.fingerprint(a.briefText) : [],
-            );
-            if (AI.ready()) {
-              const top = pairs.filter((p) => p.score >= 0.45).slice(0, 8);
-              for (let i = 0; i < top.length; i++) {
-                const p = top[i],
-                  A = rows.find((r) => r.key === p.a),
-                  B = rows.find((r) => r.key === p.b);
-                setRun(
-                  `Looking closely at ${A.label} and ${B.label} (${i + 1} of ${top.length})…`,
-                );
-                try {
-                  // The text of a student's work: what they handed in plus their repository.
-                  const get = async (r) =>
-                    texts.get(r.key) ??
-                    (r.sub?.text || "") +
-                      "\n" +
-                      (await AI.repoText(r.link || r.sub?.link).catch(
-                        () => "",
-                      ));
-                  Object.assign(
-                    p,
-                    await AI.judgePair(a, await get(A), await get(B)),
-                  );
-                } catch (e) {
-                  toast(AI.friendly(e));
-                  break;
-                }
-              }
-            }
-            const fresh = await API.getAssignment(a.id);
-            await API.setInsights(a.id, {
-              ...(fresh.insights || {}),
-              similar: {
-                at: API.now(),
-                n: items.length,
-                pairs: pairs.slice(0, 30),
-              },
-            });
-            if (AI.ready() && reviewed >= 3) {
-              setRun("Comparing each reviewed student with the class…");
-              await compareAll(a);
-            }
-            setRun(
-              pairs.length
-                ? `Done: ${pairs.length} pair${pairs.length === 1 ? "" : "s"} share code`
-                : "Done: no copied work found",
-            );
-          } finally {
-            running = false;
-            drawAssignment.sig = null;
-            renderAssignment();
           }
-        }
-
-        // =============================================================================
-        // The open review of one student: score, the requirements checklist, strengths, what
-        // to improve, the comparison with the class, and similar work.
-        // =============================================================================
-        function renderReview(a, rows, st) {
-          const r = rows.find((x) => x.key === selected);
-          if (!r) return;
-          const s = r.sub,
-            rv = s?.review,
-            c = s?.comparison;
-          // Older reviews don't have the repository's committers yet: read them once, then redraw.
-          if (
-            rv &&
-            !rv.people &&
-            r.link &&
-            AI.parseRepo(r.link) &&
-            !repoPeople.has(r.link)
-          ) {
-            repoPeople.set(r.link, []);
-            AI.repoPeople(r.link).then((list) => {
-              repoPeople.set(r.link, list);
-              rows.forEach((x) => {
-                if (x.link === r.link) x.team = teamOf(x.sub?.review, a, x);
-              });
-              if (selected === r.key && list.length > 1)
-                renderReview(a, rows, st);
-            });
+          if (sub.status === "error" && !sub.review) {
+            $("#result").innerHTML =
+              `<section class="card" style="padding:16px"><p style="font-weight:600">Submitted ✓</p><p class="small" style="color:var(--warn-ink)">The review failed: ${esc(sub.error)}</p></section>`;
+            return;
           }
-          // Turns an anonymous classmate label (P1, P2...) back into the student's name, for the lecturer
-          // only.
-          const nameOf = (label) => {
-            const id = c?.labels?.[label];
-            return rows.find((x) => x.sub?.id === id)?.label || label;
-          };
-          $("#review").innerHTML = `
-      <div><p class="small muted">${esc(r.email || "No email")}${r.group ? " · group " + esc(r.group) : ""}</p><h2 style="font-size:19px" dir="auto">${esc(r.label)}</h2></div>
-      <div class="stack" style="gap:6px">
-        ${r.link ? `<a class="small" href="${esc(r.link)}" target="_blank" rel="noopener" style="word-break:break-all">${icon("link", 12)} ${esc(r.link)}</a>` : ""}
-        ${r.extra ? `<p class="small muted" style="word-break:break-word" dir="auto">Also: ${/^https?:/.test(r.extra) ? `<a href="${esc(r.extra.split(/\s+/)[0])}" target="_blank" rel="noopener">${esc(r.extra.slice(0, 80))}</a>` : esc(r.extra)}</p>` : ""}
-        ${s?.filePath ? `<button class="btn" style="align-self:flex-start" id="rv-file">${icon("file", 16)} ${esc(s.fileName || "Open file")}</button>` : ""}
-        ${s?.uploadedBy ? `<p class="small muted">Uploaded by the lecturer</p>` : s ? `<p class="small muted">Handed in ${fmtDate(s.createdAt)} ${fmtTime(s.createdAt).slice(0, 5)}</p>` : ""}
-      </div>
-      <div class="row wrap" style="gap:8px">
-        <button class="btn btn-primary" id="rv-run">${icon("spark", 16)} ${rv ? "Review again" : "Deep review"}</button>
-        <label class="btn" style="cursor:pointer">${icon("upload", 16)} ${s?.filePath ? "Replace file" : "Upload work"}<input type="file" class="sr-only" id="rv-up" accept="${Files.ACCEPT}"></label>
-        <button class="btn" id="rv-link">${icon("link", 16)} ${r.link ? "Change link" : "Add link"}</button>
-        ${rv ? `<button class="icon-btn" id="rv-print" aria-label="Print this review">${icon("print", 16, "#68686D")}</button>` : ""}
-        ${r.hw ? `<button class="icon-btn" id="rv-del" aria-label="Remove from this assignment">${icon("trash", 16, "#68686D")}</button>` : ""}
-      </div>
-      ${r.closest && r.closest.score >= (r.closest.code ? 0.3 : 0.7) ? `<p class="small" style="color:var(--warn-ink)">${Math.round(r.closest.score * 100)}% ${r.closest.code ? "shared code" : "text match"} with <b dir="auto">${esc(r.closest.name)}</b>, worth a look.</p>` : ""}
-      ${s?.error && !rv ? `<p class="small" style="color:var(--warn-ink)">${esc(s.error)}</p>` : ""}
-      ${s?.error && rv ? `<p class="small muted">The last "Review again" didn't work (${esc(s.error)}). This is the review from before.</p>` : ""}
-      ${
-        rv
-          ? `
-        <p style="font:700 34px var(--display);line-height:1">${API.totalOf(rv)} <span class="muted" style="font-size:16px">/ ${maxOf(a)}</span></p>
-        <p style="font-size:15px;line-height:1.55" dir="auto">${esc(rv.summary || "")}</p>
-        ${r.team ? `<p class="small" dir="auto"><b>Done together:</b> ${r.team.names.map(esc).join(", ")}${r.team.where ? ` <span class="muted">(${esc(r.team.where)})</span>` : ""}</p>` : ""}
-        ${a.rubric.length > 1 ? rv.criteria.map((x) => `<div class="row" style="justify-content:space-between;gap:8px"><span class="small">${esc(x.name)}</span><b class="small">${x.score} / ${x.max}</b></div>`).join("") : ""}
-        ${(rv.requirements || []).length ? `<div class="stack" style="gap:6px"><p class="label">The assignment, point by point</p>${rv.requirements.map((q) => `<div class="req-line ${esc(q.status)}" dir="auto"><b>${{ done: "✓", partial: "◐", missing: "✗" }[q.status] || "·"}</b><span>${esc(q.item)}${q.note ? `<em>${esc(q.note)}</em>` : ""}</span></div>`).join("")}</div>` : ""}
-        ${(rv.strengths || []).length ? `<div class="stack" style="gap:4px"><p class="label">Good</p><ul class="plain-list">${rv.strengths.map((x) => `<li dir="auto">${esc(x)}</li>`).join("")}</ul></div>` : ""}
-        ${(rv.improvements || []).length ? `<div class="stack" style="gap:4px"><p class="label">To improve</p><ul class="plain-list">${rv.improvements.map((x) => `<li dir="auto">${esc(x)}</li>`).join("")}</ul></div>` : ""}
-        ${(rv.tips || []).length ? `<div class="stack" style="gap:4px"><p class="label">Ideas, not graded</p><ul class="plain-list muted">${rv.tips.map((x) => `<li dir="auto">${esc(x)}</li>`).join("")}</ul></div>` : ""}
-        ${rv.repo ? `<p class="small muted">Read ${rv.repo.files} of ${rv.repo.total} files from ${esc(rv.repo.name)}</p>` : rv.repo_error ? `<p class="small" style="color:var(--warn-ink)">${esc(rv.repo_error)}</p>` : ""}
+          const r = sub.review,
+            max = a.rubric.reduce((s, x) => s + x.points, 0),
+            total = API.totalOf(r);
+          const st = await API.classStats(a.id);
+          const enough = st.n >= 3;
+          const better = enough
+            ? Math.round(
+                (st.totals.filter((t) => t < total).length / st.totals.length) *
+                  100,
+              )
+            : null;
+          $("#result").innerHTML = `
+      <section class="card stack" style="padding:18px;gap:12px">
+        <div class="row" style="justify-content:space-between;align-items:baseline">
+          <p style="font-weight:700">Your review</p>
+          <div class="row" style="gap:10px"><p class="small muted">${esc(sub.fileName)}, ${fmtDate(sub.createdAt)}</p>
+            <button class="btn" style="min-height:36px;padding:0 12px" id="print-review">${icon("print", 16)}Print</button></div></div>
+        <p style="font:700 34px var(--display)">${total}<span class="muted" style="font-size:18px"> / ${max}</span></p>
+        <p style="font-size:15px;line-height:1.55" dir="auto">${esc(r.summary || "")}</p>
+        ${r.criteria.length > 1 ? r.criteria.map((c) => `<div class="row" style="justify-content:space-between;gap:8px"><span class="small">${esc(c.name)}</span><b class="small">${c.score} / ${c.max}</b></div>`).join("") : ""}
+        ${(r.requirements || []).length ? `<div class="stack" style="gap:6px"><p class="label">The assignment, point by point</p>${r.requirements.map((q) => `<div class="req-line ${esc(q.status)}" dir="auto"><b>${{ done: "✓", partial: "◐", missing: "✗" }[q.status] || "·"}</b><span>${esc(q.item)}${q.note ? `<em>${esc(q.note)}</em>` : ""}</span></div>`).join("")}</div>` : ""}
+        ${(r.strengths || []).length ? `<div class="stack" style="gap:4px"><p class="label">What you did well</p><ul class="plain-list">${r.strengths.map((x) => `<li dir="auto">${esc(x)}</li>`).join("")}</ul></div>` : ""}
+        ${(r.improvements || []).length ? `<div class="stack" style="gap:4px"><p class="label">To improve</p><ul class="plain-list">${r.improvements.map((x) => `<li dir="auto">${esc(x)}</li>`).join("")}</ul></div>` : ""}
+        ${(r.tips || []).length ? `<div class="stack" style="gap:4px"><p class="label">Ideas, not graded</p><ul class="plain-list muted">${r.tips.map((x) => `<li dir="auto">${esc(x)}</li>`).join("")}</ul></div>` : ""}
+      </section>
+      <section class="card stack" style="padding:16px;gap:8px">
+        <p style="font-weight:700">Compared with the class</p>
         ${
-          c
-            ? `<section class="stack" style="gap:6px;padding:12px;border-radius:12px;background:var(--paper-3)">
-          <p class="label">Compared with ${c.n} classmates</p>
-          <p class="small" dir="auto">${esc(c.standing || "")}</p>
-          ${(c.ahead || []).length ? `<p class="small" dir="auto"><b>Ahead:</b> ${c.ahead.map(esc).join(" ")}</p>` : ""}
-          ${(c.behind || []).length ? `<p class="small" dir="auto"><b>Behind:</b> ${c.behind.map(esc).join(" ")}</p>` : ""}
-          ${(c.similar_to || []).length ? `<p class="small" style="color:var(--warn-ink)" dir="auto"><b>Unusually close to:</b> ${c.similar_to.map((x) => `${esc(nameOf(x.peer))} (${esc(x.why)})`).join("; ")}</p>` : ""}
-        </section>`
-            : st.n >= 3
-              ? `<button class="btn" style="align-self:flex-start" id="rv-compare">Compare with the class</button>`
-              : `<p class="small muted">The class comparison appears once 3 students are reviewed.</p>`
-        }`
-          : ""
-      }
-      ${s?.text ? `<details><summary class="small" style="cursor:pointer">Show the text of the work</summary><pre style="white-space:pre-wrap;font-size:12px;max-height:240px;overflow:auto;background:var(--paper-3);padding:10px;border-radius:8px" dir="auto">${esc(s.text.slice(0, 20000))}</pre></details>` : ""}`;
-          $("#rv-file")?.addEventListener("click", () => openFile(s.filePath));
-          $("#rv-print")?.addEventListener("click", () =>
+          sub.comparison
+            ? `<p class="small" dir="auto">${esc(sub.comparison.standing || "")}</p>
+          ${(sub.comparison.ahead || []).length ? `<p class="small" dir="auto"><b>Where you're ahead:</b> ${sub.comparison.ahead.map(esc).join("; ")}</p>` : ""}
+          ${(sub.comparison.behind || []).length ? `<p class="small" dir="auto"><b>What most classmates did that you didn't:</b> ${sub.comparison.behind.map(esc).join("; ")}</p>` : ""}
+          ${sub.comparison.different_approach ? `<p class="small" dir="auto"><b>Your approach:</b> ${esc(sub.comparison.different_approach)}</p>` : ""}
+          ${(sub.comparison.learn_from || []).length ? `<p class="small" dir="auto"><b>Ideas from the class:</b> ${sub.comparison.learn_from.map(esc).join("; ")}</p>` : ""}`
+            : ""
+        }
+        ${
+          enough
+            ? `<p class="small">Your score is higher than <b>${better}%</b> of the ${st.n} reviewed submissions. Class average: <b>${Math.round(st.avg * 10) / 10} / ${max}</b>.</p>
+          <p class="small muted">The black line on each bar is the class average. You never see other students' work.</p>`
+            : `<p class="small muted">The comparison appears when at least 3 classmates have been reviewed (now ${st.n}).</p>`
+        }
+        ${
+          (a.insights?.common_mistakes || []).length
+            ? `<p class="small" style="font-weight:700;margin-top:6px">Common mistakes in the class</p>
+          <ul style="margin:0;padding-inline-start:20px" class="small">${a.insights.common_mistakes.map((m) => `<li>${esc(m.issue)}</li>`).join("")}</ul>`
+            : ""
+        }
+      </section>`;
+          $("#print-review").addEventListener("click", () =>
             Printer.open({
-              kicker: "Review",
-              title: r.label,
+              title: "Your review",
               sub: a.title,
               when: "end",
               done: "Sent to your printer",
-              rows: [
-                ["Score", `${API.totalOf(rv)} / ${maxOf(a)}`],
-                ...(rv.requirements || [])
-                  .slice(0, 10)
-                  .map((q) => [
-                    q.item,
-                    { done: "✓", partial: "◐", missing: "✗" }[q.status] || "",
-                  ]),
-              ],
+              rows: [["Score", `${total} / ${max}`]],
               note: course.name,
               action: () =>
                 Printer.printHTML(
-                  `${a.title}, ${r.label}`,
-                  reviewPrintHTML(a, r),
+                  `Review, ${a.title}`,
+                  `<h1 dir="auto">${esc(a.title)}</h1><p class="muted">${esc(course.name)}, review of ${esc(sub.fileName)}</p>
+        <h2>${total} / ${max}</h2><p dir="auto">${esc(r.summary || "")}</p>
+        ${(r.requirements || []).length ? `<h3>The assignment, point by point</h3><ul>${r.requirements.map((q) => `<li dir="auto">${{ done: "✓", partial: "◐", missing: "✗" }[q.status] || "·"} ${esc(q.item)}${q.note ? " (" + esc(q.note) + ")" : ""}</li>`).join("")}</ul>` : ""}
+        ${(r.strengths || []).length ? `<h3>What you did well</h3><ul>${r.strengths.map((x) => `<li dir="auto">${esc(x)}</li>`).join("")}</ul>` : ""}
+        ${(r.improvements || []).length ? `<h3>To improve</h3><ul>${r.improvements.map((x) => `<li dir="auto">${esc(x)}</li>`).join("")}</ul>` : ""}`,
                 ),
             }),
           );
-          $("#rv-run").addEventListener("click", () => reviewRow(a, r.key));
-          $("#rv-up").addEventListener("change", (e) => {
-            const f = e.target.files[0];
-            if (f) uploadFor(a, r, f);
-          });
-          $("#rv-compare")?.addEventListener("click", async () => {
-            if (!AI.ready()) return openAISettings();
-            setRun("Comparing…");
-            await compareAll(a, s.id);
-            setRun("");
-            renderAssignment();
-          });
-          $("#rv-link").addEventListener("click", async () => {
-            const v = await ask({
-              title: "Link to the work",
-              message:
-                "A GitHub repository is read by the AI reviewer. Other links are kept for you.",
-              input: { label: "Link", placeholder: "https://github.com/…" },
-              confirm: "Save",
-            });
-            if (v == null) return;
-            if (r.hw) await API.updateHwStudent(r.hw.id, { link: v });
-            if (s) await API.setSubmission(s.id, { link: v });
-            else if (!r.hw)
-              await API.addHwStudents(a.id, [
-                { email: r.email || null, name: r.name, link: v },
-              ]);
-            renderAssignment();
-          });
-          $("#rv-del")?.addEventListener("click", async () => {
-            if (
-              !(await ask({
-                title: `Remove ${r.label}?`,
-                message:
-                  "They're taken off this assignment's list. Work they handed in stays.",
-                confirm: "Remove",
-                danger: true,
-              }))
-            )
-              return;
-            await API.removeHwStudent(r.hw.id);
-            selected = null;
-            renderAssignment();
-          });
         }
 
-        if (aid) {
-          renderAssignment();
-          API.onChange(() => {
-            if (!running) return renderAssignment();
-          });
-        } else {
-          renderList();
-          if (API.isRemote)
-            setInterval(
-              async () => reviewWaiting(await API.listAssignments(course.id)),
-              15000,
-            );
-        }
+        render();
       })();
     </script>
     <span id="page-end" hidden></span>
