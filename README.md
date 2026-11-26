@@ -18,3 +18,7 @@ Paper sign-in sheets and fixed QR codes are easy to cheat: a friend signs for yo
 
 This app puts all of it in one place and makes attendance hard to fake. The QR code changes 5 times a second, every frame is signed, and the database only accepts a scan that was captured live, in the room.
 
+## Scope of work
+
+**Goal.** Attendance that students can't fake, taken in seconds, plus everything a lecturer needs during and after the lecture, in one website.
+
