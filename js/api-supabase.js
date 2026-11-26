@@ -21,6 +21,14 @@ var API = (() => {
   // =============================================================================
   const sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey);
   const SKEY = "lectureapp.session";
+  // Someone who signed in with an older version of the site stays signed in.
+  try {
+    if (
+      !localStorage.getItem(SKEY) &&
+      localStorage.getItem("classpulse.session")
+    )
+      localStorage.setItem(SKEY, localStorage.getItem("classpulse.session"));
+  } catch (e) {}
 
   // =============================================================================
   // The check-in limits: a new frame every 200 ms, at least 6 frames over at least 1
