@@ -51,3 +51,19 @@ The full version, with the plan and how we know each deliverable is done, is in 
 - **AI.** Lecture summaries from a Zoom, Drive or YouTube link, a recording or a transcript, and homework reviews against the assignment's own requirements. Each lecturer uses their own free Gemini key.
 - **Languages.** English, Hebrew and Arabic, right to left where needed.
 
+## How it is built
+
+Plain HTML, CSS and JavaScript, with no build step, hosted on GitHub Pages. Supabase gives us the database (PostgreSQL), Google sign-in, file storage and one small server function. All the rules that matter run inside the database, so a student can't get around them by changing the page.
+
+```text
+index.html            sign in
+student/              6 student pages (home, check-in, course, homework, attendance, questions)
+lecturer/             10 lecturer pages (courses, live room, students, attendance, summaries, homework, ...)
+js/                   shared code; api-supabase.js is the only file that talks to the server
+css/                  styles
+supabase/schema.sql   tables, access rules and the check-in checks
+supabase/functions/   fetch-recording: sends a Zoom or Drive recording to Gemini
+tests/                62 automated tests
+docs/                 project documents
+```
+
