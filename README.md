@@ -36,3 +36,9 @@ This app puts all of it in one place and makes attendance hard to fake. The QR c
 - AI lecture summaries and AI homework review.
 - 62 automated tests, these documents, and user guides for lecturers and students.
 
+**Not included:** grades (the AI review only helps the lecturer), writing back into Moodle, a native phone app, and paid hosting or support after the course.
+
+**Assumptions:** students have a phone with a camera, the classroom has a projector, and everything runs on free plans (GitHub Pages, Supabase, Gemini).
+
+The full version, with the plan and how we know each deliverable is done, is in [docs/scope-of-work.md](docs/scope-of-work.md).
+
