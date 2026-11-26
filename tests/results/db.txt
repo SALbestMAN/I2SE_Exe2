@@ -1,0 +1,40 @@
+ok 1 - TC-01 genuine live scan is accepted
+ok 2 - TC-02 attendance row written
+ok 3 - TC-03 second submit in the same round says already
+ok 4 - TC-04 forged frames are rejected (frames)  [frames,time]
+ok 5 - TC-05 out-of-order frames are rejected  [frames]
+ok 6 - TC-06 one frame (a photo) is rejected  [frames,speed]
+ok 7 - TC-07 frames older than the scan (recording) are rejected (time)  [time]
+ok 8 - TC-08 faster than real time is rejected (speed)  [speed]
+ok 9 - TC-09 outsider cannot start a scan  [You are not on the list for this course]
+ok 10 - TC-10 pending join request cannot start a scan  [You are not on the list for this course]
+ok 11 - TC-11 paused attendance rejects scans  [session]
+ok 12 - TC-12 old-round frames fail during the second check  [frames,time]
+ok 13 - TC-13 round-2 frames pass during the second check
+ok 14 - TC-14 same Wi-Fi and 20 m away passes
+ok 15 - TC-15 other network fails (wifi)  [wifi]
+ok 16 - TC-16 40 km away fails (loc)  [loc]
+ok 17 - TC-17 listed student can vote
+ok 18 - TC-18 changing a vote keeps one vote
+ok 19 - TC-19 outsider cannot vote
+ok 20 - TC-20 unknown option is refused
+ok 21 - TC-21 question is posted
+ok 22 - TC-22 anonymous author name never leaves the DB  [Anonymous]
+ok 23 - TC-23 second message within 5 s is refused  [Wait a few seconds between messages]
+ok 24 - TC-24 a listed student who enters the code is joined  [joined]
+ok 25 - TC-25 a student not on the list becomes a join request  [request]
+ok 26 - TC-26 a wrong code is refused  [not_found]
+ok 27 - TC-27 a listed student can ask to be marked present
+ok 28 - TC-28 a student cannot approve a request  [Only the lecturer can do this]
+ok 29 - TC-29 the lecturer approves: the student is marked present
+ok 30 - TC-30 an online lecture has no Wi-Fi or location check
+ok 31 - TC-31 an added lecturer counts as a lecturer of the course
+ok 32 - TC-32 ...but not as its owner (cannot add lecturers or delete the course)
+ok 33 - TC-33 a stranger cannot plan a lecture in the course
+ok 34 - TC-34 a student cannot read the signing secrets
+ok 35 - TC-35 a student sees only their own roster row
+ok 36 - TC-36 a student sees only their own attendance
+ok 37 - TC-37 a student cannot read the QR frames log
+ok 38 - TC-38 begin_scan claiming to be Oliver
+ok 39 - TC-39 ...was recorded as the signed-in Emma, not Oliver
+# 39 passed, 0 failed
