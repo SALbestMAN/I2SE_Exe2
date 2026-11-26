@@ -22,3 +22,17 @@ This app puts all of it in one place and makes attendance hard to fake. The QR c
 
 **Goal.** Attendance that students can't fake, taken in seconds, plus everything a lecturer needs during and after the lecture, in one website.
 
+**Success means:**
+- a student checks in with their phone in under 5 seconds;
+- a photo or video of the code sent from outside the room doesn't work;
+- the lecturer ends the lecture with an attendance sheet they can export to Excel.
+
+**What we deliver:**
+- The website: 6 student pages and 10 lecturer pages, in English, Hebrew and Arabic.
+- The database (`supabase/schema.sql`), with the access rules and the check-in checks.
+- Check-in with a moving, signed QR code, and an optional Wi-Fi, location and second check.
+- An attendance sheet with Excel and CSV export.
+- Live polls, anonymous questions, slides and a whiteboard.
+- AI lecture summaries and AI homework review.
+- 62 automated tests, these documents, and user guides for lecturers and students.
+
