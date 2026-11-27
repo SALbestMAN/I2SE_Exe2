@@ -72,3 +72,6 @@ None. Everything runs on free plans, and each lecturer uses their own free Gemin
 | Free plans have limits | The site is small, and the AI runs on each lecturer's own key |
 | Student data is private | No ID numbers are stored, and the real student list never goes into the repository |
 
+## Acceptance
+
+The lecturer reviews each deliverable against the "Accepted when" column above. The project is accepted when the demo works in class and all the documents are handed in.
