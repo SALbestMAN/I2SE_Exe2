@@ -5,101 +5,52 @@
 # Ex2: Vibe Coding & Deep Designing: Web-based Teaching Tool
 **Team:** Salman Batheesh, Ade Kassem · Ariel University
 
-
+A website for live lectures. Students check in by scanning a moving QR code on the projector. Lecturers get a live attendance sheet, polls, anonymous questions, slides they can draw on, and AI help with lecture summaries and homework.
+ 
+**Live site:** [salbestman.github.io/I2SE_Exe2](https://salbestman.github.io/I2SE_Exe2/). Open it and sign in with Google as a lecturer or a student.
+ 
+ 
 https://github.com/user-attachments/assets/51f12456-cc6f-40f1-ab99-084d2b47395a
 
 
-A web app for live lectures. Students check in by scanning a moving QR code on the projector. Lecturers get a live attendance sheet, polls, anonymous questions, slides they can draw on, and AI help with lecture summaries and homework.
-
-
 ## The problem
-
-Paper sign-in sheets and fixed QR codes are easy to cheat: a friend signs for you, or someone sends a photo of the code to the group chat. Questions, polls, slides and homework also live in separate tools, and many students don't ask questions out loud.
-
-This app puts all of it in one place and makes attendance hard to fake. The QR code changes 5 times a second, every frame is signed, and the database only accepts a scan that was captured live, in the room.
-
-## Scope of work
-
-**Goal.** Attendance that students can't fake, taken in seconds, plus everything a lecturer needs during and after the lecture, in one website.
-
-**Success means:**
-- a student checks in with their phone in under 5 seconds;
-- a photo or video of the code sent from outside the room doesn't work;
-- the lecturer ends the lecture with an attendance sheet they can export to Excel.
-
-**What we deliver:**
-- The website: 6 student pages and 10 lecturer pages, in English, Hebrew and Arabic.
-- The database (`supabase/schema.sql`), with the access rules and the check-in checks.
-- Check-in with a moving, signed QR code, and an optional Wi-Fi, location and second check.
-- An attendance sheet with Excel and CSV export.
-- Live polls, anonymous questions, slides and a whiteboard.
-- AI lecture summaries and AI homework review.
-- 62 automated tests, these documents, and user guides for lecturers and students.
-
-**Not included:** grades (the AI review only helps the lecturer), writing back into Moodle, a native phone app, and paid hosting or support after the course.
-
-**Assumptions:** students have a phone with a camera, the classroom has a projector, and everything runs on free plans (GitHub Pages, Supabase, Gemini).
-
-The full version, with the plan and how we know each deliverable is done, is in [docs/scope-of-work.md](docs/scope-of-work.md).
-
-## What it does
-
-- **Attendance.** The projector shows a code that keeps changing. The phone captures a few frames, and the database checks that the student is on the list, the frames are real and fresh, they arrived in real time, and (if turned on) the phone is on the class Wi-Fi and near the lecturer. The lecturer can add a second check later in the lecture to catch people who leave early.
-- **Courses and students.** Import the student list from the Moodle export (CSV or Excel), add students by hand, or let them join with a course code. ID numbers are never stored.
-- **Attendance sheet.** Present, partial or absent for every lecture, with the details of each check. Exports to CSV and Excel.
+ 
+Taking attendance in a big lecture is slow, and it's easy to cheat. A friend signs your name on the paper sheet. Someone takes a photo of a fixed QR code and sends it to the group chat, and people "check in" from home.
+ 
+The rest of the lecture is scattered too. Slides are in one place, polls in another app, and homework in a third. Many students never ask a question out loud, so the lecturer doesn't know what the class didn't understand.
+ 
+## Scope of the project
+ 
+We are building one website that solves both problems.
+ 
+**In scope**
+ 
+- **Attendance that can't be faked.** The QR code on the projector changes 5 times a second and every frame is signed. The phone has to film it live for about 2 seconds, and the database checks the frames before it accepts the check-in. The lecturer can also turn on a class Wi-Fi check, a location check, and a second check later in the lecture.
+- **Courses and students.** Lecturers create courses, import the student list from Moodle (CSV or Excel), and students join with a course code.
+- **Attendance sheet.** Present, partial or absent for every student and lecture, with export to Excel and CSV.
 - **During the lecture.** Live polls, anonymous questions with upvotes, and slides or a whiteboard that students follow on their phones.
-- **AI.** Lecture summaries from a Zoom, Drive or YouTube link, a recording or a transcript, and homework reviews against the assignment's own requirements. Each lecturer uses their own free Gemini key.
-- **Languages.** English, Hebrew and Arabic, right to left where needed.
-
-## How it is built
-
-Plain HTML, CSS and JavaScript, with no build step, hosted on GitHub Pages. Supabase gives us the database (PostgreSQL), Google sign-in, file storage and one small server function. All the rules that matter run inside the database, so a student can't get around them by changing the page.
-
-```text
-index.html            sign in
-student/              6 student pages (home, check-in, course, homework, attendance, questions)
-lecturer/             10 lecturer pages (courses, live room, students, attendance, summaries, homework, ...)
-js/                   shared code; api-supabase.js is the only file that talks to the server
-css/                  styles
-supabase/schema.sql   tables, access rules and the check-in checks
-supabase/functions/   fetch-recording: sends a Zoom or Drive recording to Gemini
-tests/                62 automated tests
-docs/                 project documents
-```
-
-## Setting it up
-
-1. Create a Supabase project. In the SQL Editor, paste all of `supabase/schema.sql` and run it.
-2. Turn on Google sign-in: create an OAuth client in Google Cloud and paste its ID and secret in Supabase (Authentication → Providers → Google).
-3. Paste the project URL and the publishable key into `js/config.js`.
-4. Publish the repository with GitHub Pages, and put the Pages address in Supabase (Authentication → URL Configuration).
-5. For Zoom and Drive summaries, deploy `supabase/functions/fetch-recording` as an Edge Function named `fetch-recording` and turn off Verify JWT (the function checks the sign-in itself).
-
-The secret key, the service_role key, the database password and the Google client secret never go into this repository. Neither does the real student list.
-
-## Tests
-
-There are 62 tests in three groups. On the last run (26 Nov 2026) all of them passed. The test IDs match the [testing strategy](docs/testing-strategy.md).
-
-| Folder | What it tests | Tests | You need | Run |
-| --- | --- | --- | --- | --- |
-| `tests/db/` | The real `supabase/schema.sql` on PostgreSQL | 39 | PostgreSQL 14+ and `psql` | `tests/db/run.sh` |
-| `tests/unit/` | The browser code in Node, no network | 16 | Node.js 18+ | `node --test tests/unit/unit.test.js` |
-| `tests/e2e/` | The real pages in a headless browser, with sample data | 7 | Node.js, Playwright, and Python with OpenCV for the QR test | Start `tests/e2e/serve-test-site.sh`, then in a second terminal `node --test --test-concurrency=1 tests/e2e/e2e.test.js` |
-
-`tests/db/run.sh` deletes and recreates a database called `cp_test` each time, so run it only on a local test database. The output of the last run is in `tests/results/`. All test data uses invented names and emails.
-
-## Documents
-
-Read them in this order. Each one builds on the one before it.
-
-- [Technical tools report](docs/technical-tools-report.md): the tools we picked and what happened when we tried each one.
-- [Scope of work](docs/scope-of-work.md): the full version of the scope above, with the plan.
-- [Software requirements](docs/software-requirements.md): what the system must do, each requirement with an ID.
-- [Use cases and user stories](docs/use-cases-and-user-stories.md): how lecturers and students use it, step by step.
-- [Software design](docs/software-design.md): the main parts of the system and how they talk to each other.
-- [Class diagram](docs/class-diagram.md): the data and the code modules.
-- [Sequence diagrams](docs/sequence-diagrams.md): check-in, an AI summary, and a poll vote, message by message.
-- [Testing strategy](docs/testing-strategy.md): how we test, all 62 tests, and the results.
-
-The IDs connect the documents. A requirement (REQ-06) leads to a use case (UC-01), a part of the design, and the tests that prove it works (TC-01 to TC-16). The table at the end of the requirements document shows this for every requirement. Diagrams are written in Mermaid, so GitHub draws them right on the page.
+- **After the lecture.** AI summaries of the recording, and AI review of homework against the assignment's own requirements.
+- **Three languages.** English, Hebrew and Arabic.
+**Out of scope**
+ 
+- Final grades. The AI review helps the lecturer; it doesn't grade.
+- Writing back into Moodle. We only read its exported student list.
+- A native phone app. Everything runs in the phone's browser.
+- Paid hosting or support after the course.
+**Users:** lecturers on a laptop connected to the projector, and students on their phones.
+ 
+**Built with:** plain HTML, CSS and JavaScript on GitHub Pages, and Supabase for the database, Google sign-in and file storage. All the rules that matter run inside the database, so a student can't get around them by changing the page.
+ 
+## Project documents
+ 
+| Document | What's in it |
+| --- | --- |
+| [Technical tools report](docs/tools-report.md) | The tools we use and how we tested each one for real |
+| [Statement of Work (SoW)](docs/SoW.md) | Objectives, deliverables, schedule and how the work is accepted |
+| [Software Requirements Specification (SRS)](docs/SRS.md) | Everything the system must do, with IDs |
+| [Use cases](docs/use-cases.md) | The client stories, step by step |
+| [Software components](docs/software-components.md) | The main parts of the system and how they connect |
+| [Class and sequence diagrams](docs/class-and-sequence-diagrams.md) | The low-level design |
+| [Testing strategy](docs/testing-strategy.md) | How we test each component, and the results |
+| [Conclusion](docs/conclusion.md) | What we built and what we learned |
+ 
