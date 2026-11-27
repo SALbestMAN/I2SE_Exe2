@@ -62,3 +62,13 @@ We work remotely and meet in class. The work runs over the semester and ends wit
 ## Costs
 
 None. Everything runs on free plans, and each lecturer uses their own free Gemini key.
+
+## Assumptions and risks
+
+| Assumption or risk | What we do about it |
+| --- | --- |
+| Students have a phone with a camera | A student who can't check in can ask the lecturer to mark them present |
+| The classroom Wi-Fi may be weak | The projector draws the code by itself, so it keeps moving without the internet |
+| Free plans have limits | The site is small, and the AI runs on each lecturer's own key |
+| Student data is private | No ID numbers are stored, and the real student list never goes into the repository |
+
