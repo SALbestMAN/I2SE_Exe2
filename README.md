@@ -5,6 +5,8 @@
 # Ex2: Vibe Coding & Deep Designing: Web-based Teaching Tool
 **Team:** Salman Batheesh, Ade Kassem · Ariel University
 
+[![tests](https://github.com/SALbestMAN/I2SE_Exe2/actions/workflows/tests.yml/badge.svg)](https://github.com/SALbestMAN/I2SE_Exe2/actions/workflows/tests.yml)
+
 A website for live lectures. Students check in by scanning a moving QR code on the projector. Lecturers get a live attendance sheet, polls, anonymous questions, slides they can draw on, and AI help with lecture summaries and homework.
  
 **Live site:** [salbestman.github.io/I2SE_Exe2](https://salbestman.github.io/I2SE_Exe2/). Open it and sign in with Google as a lecturer or a student.
