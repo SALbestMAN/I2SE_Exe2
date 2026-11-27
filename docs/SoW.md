@@ -59,3 +59,6 @@ We work remotely and meet in class. The work runs over the semester and ends wit
 | Demo in class | Demo day | A live check-in works in the room |
 | Conclusion | After the demo | It describes the results |
 
+## Costs
+
+None. Everything runs on free plans, and each lecturer uses their own free Gemini key.
