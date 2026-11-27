@@ -46,3 +46,16 @@ We work remotely and meet in class. The work runs over the semester and ends wit
 - **Services, all on free plans:** GitHub (code and hosting), Supabase (database, sign-in, storage), Google Gemini (AI).
 - **For the demo:** a laptop with a projector, and students' phones.
 
+## Deliverables and schedule
+
+| Deliverable | Due | Accepted when |
+| --- | --- | --- |
+| README with the problem and the scope | Start of the project | The lecturer approves the scope |
+| Tools report | Before we start building | Every tool was tried for real |
+| SoW, SRS and use cases | Before we start building | Every requirement has an ID and a priority |
+| Components, class and sequence diagrams | Before the main build | Every requirement belongs to a component |
+| The website and the database | Before the demo | It runs on GitHub Pages and works on a phone and a laptop |
+| Tests and the testing strategy | Before the demo | All automated tests pass |
+| Demo in class | Demo day | A live check-in works in the room |
+| Conclusion | After the demo | It describes the results |
+
