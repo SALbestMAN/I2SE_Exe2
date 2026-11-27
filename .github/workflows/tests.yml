@@ -1,0 +1,66 @@
+# Runs all 62 tests on every push and pull request, and gives the README its badge.
+name: tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  unit:
+    name: Unit tests (16)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node --test tests/unit/unit.test.js
+
+  database:
+    name: Database tests (39)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run the database tests
+        run: |
+          sh tests/db/run.sh | tee db.txt
+          if grep -q "^not ok" db.txt || ! grep -q ", 0 failed" db.txt; then exit 1; fi
+
+  e2e:
+    name: End-to-end tests (7)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Playwright and OpenCV
+        run: |
+          npm install --no-save playwright@1.49.1
+          npx playwright install --with-deps chromium
+          pip install opencv-python-headless
+      - name: Start the test site
+        run: |
+          sh tests/e2e/serve-test-site.sh > server.log 2>&1 &
+          for i in $(seq 1 30); do curl -s -o /dev/null http://localhost:8765/index.html && break; sleep 1; done
+      - run: node --test --test-concurrency=1 tests/e2e/e2e.test.js
