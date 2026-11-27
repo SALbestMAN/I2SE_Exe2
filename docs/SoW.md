@@ -25,3 +25,14 @@ We will design, build, test and document a website with:
 
 **Not included:** final grades, writing back into Moodle, a native phone app, and support after the course.
 
+## Tasks
+
+| Task | What we do |
+| --- | --- |
+| Research | Try the tools and pick the stack (see the [tools report](tools-report.md)) |
+| Requirements | Write the SRS and the use cases |
+| Design | Define the components, the class diagrams and the sequence diagrams |
+| Build | Write the database, the data layer, and the lecturer and student pages |
+| Test | Write and run database, unit and end-to-end tests; check the rest by hand |
+| Demo | Show a live check-in and a full lecture in class |
+
