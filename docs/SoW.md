@@ -36,3 +36,7 @@ We will design, build, test and document a website with:
 | Test | Write and run database, unit and end-to-end tests; check the rest by hand |
 | Demo | Show a live check-in and a full lecture in class |
 
+## Place and time
+
+We work remotely and meet in class. The work runs over the semester and ends with the demo in class.
+
