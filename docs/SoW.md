@@ -40,3 +40,9 @@ We will design, build, test and document a website with:
 
 We work remotely and meet in class. The work runs over the semester and ends with the demo in class.
 
+## Resources
+
+- **People:** Salman Batheesh and Ade Kassem.
+- **Services, all on free plans:** GitHub (code and hosting), Supabase (database, sign-in, storage), Google Gemini (AI).
+- **For the demo:** a laptop with a projector, and students' phones.
+
