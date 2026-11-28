@@ -108,7 +108,7 @@
             aria-label="My courses"
           ></section>
           <div class="shelf-bar">
-            <div class="shelf-nav">
+            <div class="shelf-nav" style="direction: ltr">
               <button
                 class="round-btn"
                 id="prev"
@@ -305,9 +305,9 @@
           }
         };
         $("#prev").innerHTML =
-          `<span class="flip" style="display:flex">${icon("back", 18, "currentColor", 2.2)}</span>`;
+          `<span style="display:flex">${icon("back", 18, "currentColor", 2.2)}</span>`;
         $("#next").innerHTML =
-          `<span class="flip" style="display:flex;transform:rotate(180deg)">${icon("back", 18, "currentColor", 2.2)}</span>`;
+          `<span style="display:flex;transform:rotate(180deg)">${icon("back", 18, "currentColor", 2.2)}</span>`;
 
         // =============================================================================
         // The shelf of the student's courses. The panel beside it shows the course in front:
