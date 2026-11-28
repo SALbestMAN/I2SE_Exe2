@@ -74,3 +74,15 @@
 | NFR-06 Cost | It runs on free plans only. | The live site |
 | NFR-07 Offline | A question written with no connection is sent when the connection comes back. | Checked by hand |
 
+## External interfaces
+
+| Interface | Used for |
+| --- | --- |
+| Google sign-in (through Supabase Auth) | Signing in with the university account |
+| Supabase (HTTPS) | All data, file storage, and the database functions |
+| Google Gemini API | AI summaries and reviews, with each lecturer's own key |
+| GitHub API | Reading a student's repository for a homework review |
+| Zoom, Google Drive, YouTube | Where lecture recordings come from |
+| Moodle | Only as an exported CSV or Excel file |
+| Phone camera and location | Scanning the code and the distance check |
+
