@@ -240,6 +240,7 @@ var API = (() => {
       terms: r.terms,
       lecturerEmail: r.lecturer_email,
       createdAt: ms(r.created_at),
+      cover: r.cover ?? null,
       isOwner:
         String(r.lecturer_email || "").toLowerCase() ===
         myEmail().toLowerCase(),
@@ -449,21 +450,24 @@ var API = (() => {
   }
 
   // =============================================================================
-  // Renames a course or changes its lecture times.
+  // Renames a course, changes its lecture times, or changes the colour of its book
+  // (cover: the number of one of the book colours).
   // =============================================================================
-  async function updateCourse(id, { name, schedule }) {
+  async function updateCourse(id, { name, schedule, cover }) {
     name = cleanName(name);
     if (!name) return { ok: false, error: "Course name is required" };
+    const row = { name, schedule: cleanSchedule(schedule) };
+    if (Number.isInteger(cover) && cover >= 0 && cover < 8) row.cover = cover;
     const { data, error } = await sb
       .from("courses")
-      .update({ name, schedule: cleanSchedule(schedule) })
+      .update(row)
       .eq("id", id)
       .select()
       .single();
     if (error)
       return {
         ok: false,
-        error: /schedule/.test(error.message)
+        error: /schedule|cover/.test(error.message)
           ? "Run the latest schema.sql in Supabase first."
           : error.message,
       };
