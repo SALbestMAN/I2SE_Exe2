@@ -86,3 +86,17 @@
 | Moodle | Only as an exported CSV or Excel file |
 | Phone camera and location | Scanning the code and the distance check |
 
+## Main data
+
+| Thing | What it holds |
+| --- | --- |
+| Course | Name, join code, owner, weekly times |
+| Student list entry | Course, email, name, group, status (listed, joined, or waiting for approval) |
+| Lecture (session) | Course, title, date, in class or online, which checks are on, attendance state |
+| Lecture secret | The key that signs the QR frames. Only lecturers of the course can read it |
+| Attendance | Student, lecture, round, how old the code was, network, distance |
+| Blocked attempt | Student, lecture, and the reasons the scan was refused |
+| Poll and vote | Question, 2 to 4 answers, one vote per student |
+| Question | Text, anonymous or not, upvotes, answer, answered or hidden |
+| Summary, assignment, submission | The AI summary of a lecture; the homework and each student's hand-in and review |
+
