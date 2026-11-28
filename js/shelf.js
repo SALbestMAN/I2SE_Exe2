@@ -427,7 +427,7 @@ var Shelf = (() => {
         px = (e.clientX - r.left) / r.width,
         py = (e.clientY - r.top) / r.height;
       b.querySelector(".book-3d").style.transform =
-        `translateY(-8px) scale(1.035) rotateY(${(px - 0.5) * 10}deg) rotateX(${(0.5 - py) * 8}deg)`;
+        `translateY(-10px) scale(1.04) rotateY(${(px - 0.5) * 24}deg) rotateX(${(0.5 - py) * 18}deg)`;
       const f = b.querySelector(".cover-front");
       f.style.setProperty("--mx", px * 100 + "%");
       f.style.setProperty("--my", py * 100 + "%");
