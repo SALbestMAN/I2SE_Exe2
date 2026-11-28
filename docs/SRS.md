@@ -62,3 +62,15 @@
 | REQ-14 | review handed-in homework with AI against the assignment's own requirements, find copied work, and give the lecturer a summary of the whole class. | Could |
 | REQ-15 | let a course's owner add other lecturers. They can do everything except add lecturers and delete the course. | Could |
 
+## Non-functional requirements
+
+| ID | Requirement | How we check it |
+| --- | --- | --- |
+| NFR-01 Security | A student can never read the signing keys or the frames log, and sees only their own row in the student list and their own attendance. Every check runs in the database, not in the browser. | TC-34 to TC-39 |
+| NFR-02 Privacy | No ID numbers are stored. An anonymous asker's name never leaves the database. The real student list is never in the repository. | TC-22, TC-46 |
+| NFR-03 Usability | Every student page works on a 390 px wide phone with no sideways scrolling. A check-in takes under 5 seconds. | TC-61, and timed in the demo |
+| NFR-04 Languages | The whole site works in English, Hebrew and Arabic, right to left where needed. | TC-55, TC-60 |
+| NFR-05 Speed | The projector code changes at least 4 times a second, even on a slow network. | TC-57 |
+| NFR-06 Cost | It runs on free plans only. | The live site |
+| NFR-07 Offline | A question written with no connection is sent when the connection comes back. | Checked by hand |
+
