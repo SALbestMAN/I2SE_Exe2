@@ -79,3 +79,24 @@ flowchart LR
   K -- no --> Z5((end))
 ```
 
+## UC-03 Run a live lecture
+
+**Who:** a lecturer.
+**Before:** the lecturer is signed in and teaches the course.
+**After:** the lecture is over and attendance is saved. The slides are deleted from storage, and the files the lecturer chose to keep are shared with the class.
+
+1. The lecturer opens the live room for a planned lecture, or clicks **Start now**.
+2. The lecture starts, and the server saves the lecturer's network and location for the Wi-Fi and distance checks.
+3. The lecturer clicks **Start attendance**. The projector shows the moving code and a live count.
+4. Students check in (UC-01). The lecturer clicks **Stop**.
+5. The lecturer shows slides or the whiteboard, runs polls (UC-08) and answers questions (UC-09).
+6. The second check starts with the button, after N minutes, or at the set time. It closes by itself when its time runs out.
+7. The lecturer clicks **End lecture** and chooses what to keep.
+8. The kept files are shared, the slides are deleted from storage, and the lecture ends.
+
+**Other paths**
+
+- The lecturer pauses attendance: the code stops and scans are refused until **Resume**.
+- The lecturer cancels a planned second check.
+- Preparing the files takes more than 90 seconds: the lecturer is told and can try again.
+
