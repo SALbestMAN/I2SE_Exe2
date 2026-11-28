@@ -31,6 +31,10 @@ create table if not exists courses (
   created_at timestamptz not null default now()
 );
 
+-- The colour of the course's book (one of the 8 book colours, 0 to 7). Empty until
+-- the lecturer picks one; until then the course gets one by its place on the shelf.
+alter table courses add column if not exists cover smallint check (cover between 0 and 7);
+
 -- =============================================================================
 -- Other lecturers who run a course with its owner. They can do everything the owner
 -- can, except add or remove lecturers and delete the course.
