@@ -12,3 +12,13 @@
 - **Should:** important.
 - **Could:** a nice extra.
 
+**Words we use**
+
+| Word | Meaning |
+| --- | --- |
+| Lecture (session) | One meeting of a course |
+| Frame | One picture of the QR code. A new one appears every 200 ms |
+| Check-in | A student scanning the code to be marked present |
+| Second check | An optional second scan later in the lecture. Missing it gives "partial" |
+| Student list (roster) | The students allowed in a course |
+
