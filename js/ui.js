@@ -423,38 +423,65 @@ function toast(msg) {
 
 // =============================================================================
 // The cloth colours for course books. Every course keeps the same colour on the shelf,
-// in the lists and on its pages.
+// in the lists and on its pages. The lecturer can pick one in "Edit course"; until then
+// a course gets one by its place on the shelf.
 // =============================================================================
 const COVERS = [
   {
+    name: "Blue",
     cover: "#2440E6",
     ink: "#FFFFFF",
     rule: "rgba(255,255,255,.10)",
     ribbon: "#FFE45C",
   },
   {
+    name: "Black",
     cover: "#141414",
     ink: "#F3F0E8",
     rule: "rgba(243,240,232,.08)",
     ribbon: "#2440E6",
   },
   {
+    name: "Red",
     cover: "#C8371D",
     ink: "#FFFFFF",
     rule: "rgba(255,255,255,.12)",
     ribbon: "#FFE45C",
   },
   {
+    name: "Grey",
     cover: "#5E5A53",
     ink: "#F3F0E8",
     rule: "rgba(243,240,232,.10)",
     ribbon: "#FFE45C",
   },
   {
+    name: "Yellow",
     cover: "#FFE45C",
     ink: "#141414",
     rule: "rgba(20,20,20,.08)",
     ribbon: "#2440E6",
+  },
+  {
+    name: "Green",
+    cover: "#1F6B4A",
+    ink: "#FFFFFF",
+    rule: "rgba(255,255,255,.10)",
+    ribbon: "#FFE45C",
+  },
+  {
+    name: "Purple",
+    cover: "#5B3FC8",
+    ink: "#FFFFFF",
+    rule: "rgba(255,255,255,.10)",
+    ribbon: "#FFE45C",
+  },
+  {
+    name: "Cream",
+    cover: "#E9E3D3",
+    ink: "#141414",
+    rule: "rgba(20,20,20,.07)",
+    ribbon: "#C8371D",
   },
 ];
 
