@@ -335,7 +335,7 @@
               .filter(Boolean)
               .join(" · "),
           hrefOf: (c) => `course.html?course=${c.code}`,
-          onExtra: () => $("#joincode")?.focus(),
+          onExtra: () => toJoinForm(),
           onActive: (c, i, changed) => {
             if (!c) {
               swapPanel(
@@ -366,6 +366,56 @@
         $("#panel").addEventListener("click", (e) => {
           if (e.target.closest("[data-act=open]")) shelf.open();
         });
+
+        // =============================================================================
+        // Scrolls the page down to the "join a course" form in one smooth glide (fast at
+        // first, slowing as it arrives), then puts the cursor in the code box. If the form is
+        // already on screen it only puts the cursor there.
+        // =============================================================================
+        function toJoinForm() {
+          const form = $("#join-form"),
+            code = $("#joincode");
+          if (!form) return;
+          const r = form.getBoundingClientRect();
+          const goal = Math.max(
+            0,
+            Math.min(
+              document.documentElement.scrollHeight - innerHeight,
+              scrollY + r.top - Math.max(24, (innerHeight - r.height) / 2),
+            ),
+          );
+          const from = scrollY,
+            dist = goal - from;
+          const done = () => code?.focus({ preventScroll: true });
+          if (
+            Math.abs(dist) < 4 ||
+            matchMedia("(prefers-reduced-motion: reduce)").matches
+          ) {
+            if (Math.abs(dist) >= 4) scrollTo(0, goal);
+            return done();
+          }
+          const ms = Math.min(900, 420 + Math.abs(dist) * 0.6),
+            t0 = performance.now();
+          const ease = (t) => 1 - Math.pow(1 - t, 4);
+          // Stops if the person scrolls by themselves on the way.
+          let stopped = false;
+          const stop = () => {
+            stopped = true;
+          };
+          addEventListener("wheel", stop, { once: true, passive: true });
+          addEventListener("touchstart", stop, { once: true, passive: true });
+          (function step(now) {
+            if (stopped) return;
+            const t = Math.min(1, (now - t0) / ms);
+            scrollTo(0, from + dist * ease(t));
+            if (t < 1) requestAnimationFrame(step);
+            else {
+              removeEventListener("wheel", stop);
+              removeEventListener("touchstart", stop);
+              done();
+            }
+          })(t0);
+        }
 
         // =============================================================================
         // Each refresh asks about every course, and the whole class does it, so the slow parts
