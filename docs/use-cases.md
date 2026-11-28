@@ -100,3 +100,18 @@ flowchart LR
 - The lecturer cancels a planned second check.
 - Preparing the files takes more than 90 seconds: the lecturer is told and can try again.
 
+## UC-05 Join a course
+
+**Who:** a student.
+**Before:** the student is signed in.
+**After:** the student is in the course, or a request is waiting for the lecturer.
+
+1. The student types the 6-character code on their home page.
+2. The app finds the course.
+3. The student is on the list, so they're in, and the course shows up on their shelf.
+
+**Other paths**
+
+- No course has this code: "No course with this code".
+- The student isn't on the list: a request is sent, and the lecturer approves or declines it on the Requests page.
+- The student already sent a request: the app says so.
