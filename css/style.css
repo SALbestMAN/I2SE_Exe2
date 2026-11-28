@@ -4981,3 +4981,29 @@ html.lenis body {
   font-size: 14px;
   padding: 0 6px;
 }
+
+/* =============================================================================
+   The pencil pointer (js/motion.js). The normal mouse pointer is hidden from the very
+   first moment a page shows, and during the slide from one page to the next, so it
+   never flashes between pages. js/motion.js adds "mx-off" where the normal pointer
+   should show (in a dialog, on the dark screens, for reduced motion).
+   ============================================================================= */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  html:not(.mx-off):not(:has(> body.dark-screen)),
+  html:not(.mx-off):not(:has(> body.dark-screen))::view-transition {
+    cursor: none;
+  }
+  /* Text boxes and the like keep their normal pointer. */
+  :where(
+    input,
+    textarea,
+    select,
+    [contenteditable="true"],
+    iframe,
+    video,
+    canvas,
+    [data-native-cursor]
+  ) {
+    cursor: auto;
+  }
+}
