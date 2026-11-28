@@ -100,3 +100,24 @@
 | Question | Text, anonymous or not, upvotes, answer, answered or hidden |
 | Summary, assignment, submission | The AI summary of a lecture; the homework and each student's hand-in and review |
 
+## Traceability
+
+Each requirement leads to a use case ([use cases](use-cases.md)), to the components that build it ([components](software-components.md)), and to the tests that prove it works ([testing strategy](testing-strategy.md)).
+
+| Requirement | Use case | Components | Tests |
+| --- | --- | --- | --- |
+| REQ-01 Sign in | all | C-8, C-9 | TC-38, TC-39, and by hand |
+| REQ-02 Courses and lectures | UC-02, UC-03 | C-1, C-10 | TC-30, TC-33 |
+| REQ-03 Student list | UC-04 | C-1, C-5 | TC-10, TC-35, TC-40 to TC-47 |
+| REQ-04 Join by code | UC-05 | C-2, C-10 | TC-24 to TC-26 |
+| REQ-05 Moving signed code | UC-01, UC-03 | C-1, C-4 | TC-04, TC-48, TC-50, TC-57, TC-62 |
+| REQ-06 Check-in checks | UC-01 | C-2, C-4, C-10 | TC-01 to TC-10, TC-12 to TC-16 |
+| REQ-07 Attendance control | UC-03 | C-1, C-10 | TC-11 to TC-13, TC-53 |
+| REQ-08 Attendance sheet | UC-06 | C-5, C-8 | TC-51 to TC-54 |
+| REQ-09 Requests to be marked present | UC-07 | C-2, C-10 | TC-27 to TC-29 |
+| REQ-10 Polls | UC-08 | C-10 | TC-17 to TC-20, TC-58 |
+| REQ-11 Questions | UC-09 | C-10 | TC-21 to TC-23, TC-59 |
+| REQ-12 Slides and whiteboard | UC-03 | C-7, C-11 | By hand |
+| REQ-13 AI summaries | UC-10 | C-6, C-12 | By hand |
+| REQ-14 AI homework review | UC-11 | C-6, C-11 | TC-47, and by hand |
+| REQ-15 More lecturers | UC-02 | C-10 | TC-31 to TC-33 |
