@@ -404,14 +404,30 @@
         renderLecturers();
 
         // =============================================================================
-        // Edits the course's name and weekly lecture times.
+        // Edits the course's name, weekly lecture times and the colour of its book.
         // =============================================================================
+        // The book colours as round buttons to pick from, the current one already picked.
+        function coloursHTML(now) {
+          const dots = COVERS.map(
+            (
+              k,
+              i,
+            ) => `<label style="position:relative;display:inline-grid;cursor:pointer" title="${k.name}">
+        <input type="radio" name="ec-cover" value="${i}" ${i === now ? "checked" : ""} aria-label="${k.name}" style="position:absolute;opacity:0;width:1px;height:1px">
+        <span class="ec-dot" style="width:38px;height:38px;border-radius:50%;background:${k.cover};box-shadow:inset 0 0 0 1px rgba(20,20,20,.18);display:grid;place-items:center;color:${k.ink}"></span></label>`,
+          ).join("");
+          return `<div class="field">Book colour<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px">${dots}</div></div>
+      <style>input[name=ec-cover]:checked + .ec-dot { outline: 2px solid #141414; outline-offset: 3px; }
+        input[name=ec-cover]:checked + .ec-dot::after { content: "✓"; font: 700 16px/1 var(--font); }
+        input[name=ec-cover]:focus-visible + .ec-dot { outline: 2px solid #2440E6; outline-offset: 3px; }</style>`;
+        }
         $("#edit-course").addEventListener("click", async () => {
+          const now = COVERS.indexOf(coverOf(course));
           const res = await ask({
             title: "Edit course",
             wide: true,
             confirm: "Save",
-            body: `<label class="field">Course name<input class="input" id="ec-name" dir="auto" value="${esc(course.name)}" required></label>${scheduleEditorHTML(course.schedule || [])}`,
+            body: `<label class="field">Course name<input class="input" id="ec-name" dir="auto" value="${esc(course.name)}" required></label>${coloursHTML(now)}${scheduleEditorHTML(course.schedule || [])}`,
             wire: (d) => wireSchedule(d),
             read: (d) => {
               const name = d.querySelector("#ec-name").value.trim();
@@ -419,13 +435,19 @@
                 d.querySelector("#ec-name").focus();
                 return null;
               }
-              return { name, schedule: readSchedule(d) };
+              const pick = d.querySelector("input[name=ec-cover]:checked");
+              return {
+                name,
+                schedule: readSchedule(d),
+                cover: pick ? +pick.value : now,
+              };
             },
           });
           if (!res) return;
           const r = await API.updateCourse(course.id, res);
           if (!r.ok) return toast(r.error);
-          Object.assign(course, r.course);
+          Object.assign(course, r.course, { cover: res.cover });
+          rememberCourse(course);
           try {
             sessionStorage.removeItem("cp.side-courses");
           } catch (e) {}
