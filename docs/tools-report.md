@@ -21,3 +21,12 @@ We wanted no server of our own to run or pay for, and no build step. So the site
 | **Mermaid** | Diagrams written as text that GitHub draws | All the diagrams in our documents | Works |
 | **Claude** (AI coding assistant) | Helped us write pages, SQL and tests | Used through the whole project | Much faster. We still read and test everything it writes |
 
+## What we tried and didn't pick
+
+| Option | Why not |
+| --- | --- |
+| Our own Node or Python server | More to build, host and secure, and it costs money. Supabase gives us sign-in, a database and storage ready to use |
+| React or another framework | Needs a build step. Plain JavaScript is easier to read and hand over |
+| A fixed QR code, or one that changes every 30 seconds | A photo sent to a friend works from home. A code that changes 5 times a second and must be filmed live doesn't |
+| One shared AI key on a server | We would pay for it and have to protect it. Each lecturer's own free key costs us nothing |
+
