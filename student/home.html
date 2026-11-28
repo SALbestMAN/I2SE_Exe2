@@ -265,7 +265,7 @@
           const list = mine.map((c, i) => ({
             ...c,
             live: liveIds.has(c.id),
-            cover: i,
+            cover: c.cover ?? i,
           }));
           shelf.set(list);
           sideCourses(list);
