@@ -215,8 +215,9 @@ var Motion = (() => {
 // =============================================================================
 // The mouse pointer on the light pages: a pencil. It writes a thin, short line behind
 // it as it moves. Near anything you can click (a button, a tab, a link, a course book),
-// a tag, or a word that is already highlighted in yellow, it turns into a yellow
-// highlighter, its line turns yellow, and the thing under it gets highlighted. Big
+// a tag, or a word that is already highlighted in yellow, and while you select text,
+// it turns into a yellow highlighter, its line turns yellow, and the thing under it
+// gets highlighted. Big
 // titles do a small wave when the mouse passes over them.
 // While a dialog is open, and over text boxes and drawing areas, the normal pointer
 // is used. Off on phones and tablets, for reduced motion, and on the dark screens
@@ -379,8 +380,12 @@ var Motion = (() => {
     }
 
     // Turns the highlighter on at once, and off only after a short moment, so sliding
-    // quickly from one button to the next never flashes the pencil.
+    // quickly from one button to the next never flashes the pencil. While text is being
+    // selected (to copy it), it stays a highlighter.
+    let down = false,
+      selecting = false;
     function setNear(v) {
+      if (selecting) v = true;
       if (v) {
         clearTimeout(leaveT);
         leaveT = 0;
@@ -396,7 +401,7 @@ var Motion = (() => {
         near = false;
         pen.classList.remove("hl");
         wake();
-      }, 180);
+      }, 80);
     }
 
     // The words of a side link or a switch button, as a box on the screen.
@@ -508,6 +513,26 @@ var Motion = (() => {
       wake();
     }
 
+    // Selecting text: the mouse is held down and the selection is not empty.
+    addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" && e.button === 0) down = true;
+    });
+    addEventListener("pointerup", () => {
+      down = false;
+      if (selecting) {
+        selecting = false;
+        if (mx > -50) update(document.elementFromPoint(mx, my));
+      }
+    });
+    document.addEventListener("selectionchange", () => {
+      const sel = document.getSelection();
+      if (down && sel && !sel.isCollapsed && String(sel).trim()) {
+        selecting = true;
+        setNear(true);
+        wake();
+      }
+    });
+
     let moved = false;
     addEventListener(
       "pointermove",
@@ -606,7 +631,9 @@ var Motion = (() => {
       attributeFilter: ["open"],
     });
   }
-  if (document.readyState === "loading")
-    addEventListener("DOMContentLoaded", start);
-  else start();
+  // The script sits at the end of each page, so the page is already there: start at
+  // once, before the page is first drawn, so the normal pointer never flashes in
+  // between two pages.
+  if (document.body) start();
+  else addEventListener("DOMContentLoaded", start);
 })();
