@@ -22,3 +22,23 @@
 | Second check | An optional second scan later in the lecture. Missing it gives "partial" |
 | Student list (roster) | The students allowed in a course |
 
+## Overall description
+
+**Users**
+
+| User | Device | What they do |
+| --- | --- | --- |
+| Lecturer | Laptop, usually on the projector | Sets up courses, runs lectures, reads the attendance sheet, uses the AI tools |
+| Student | Phone | Joins courses, checks in, votes, asks questions, hands in homework |
+
+**Where it runs.** In any modern browser. The site is hosted on GitHub Pages, and the data lives in Supabase.
+
+**Constraints**
+
+- Free plans only.
+- No server of our own.
+- The camera needs HTTPS.
+- Every rule that matters must run in the database, not in the browser.
+
+**Assumptions.** Students have a phone with a camera. The classroom has a projector.
+
