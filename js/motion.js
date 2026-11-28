@@ -213,12 +213,16 @@ var Motion = (() => {
 })();
 
 // =============================================================================
-// The mouse pointer on the light pages. The pointer is a small dot that follows the
-// mouse smoothly. Over a button or a link it changes into the button's own shape and
-// wraps around it, as if selecting it, and the button leans slightly toward the
-// mouse. Over text boxes, drawing areas, dialogs and the course books the normal
-// pointer comes back. Off on phones and tablets, for reduced motion, and on the dark
-// screens (scan and projector).
+// The mouse pointer on the light pages. The pointer is a small drop of liquid glass
+// that follows the mouse smoothly and leaves a short, thin trail behind it. Over a
+// button or a link the glass stretches into the button's own shape, as if selecting
+// it, and the button leans slightly toward the mouse. Over the course books it
+// becomes a round arrow (back, next, or open). Big titles do a small wave when the
+// mouse passes over them, and in other titles a thin line draws itself under the
+// words in italics.
+// While a dialog is open, and over text boxes and drawing areas, the normal pointer
+// is used. Off on phones and tablets, for reduced motion, and on the dark screens
+// (scan and projector).
 // =============================================================================
 (() => {
   const fine = matchMedia("(hover: hover) and (pointer: fine)").matches;
@@ -226,20 +230,139 @@ var Motion = (() => {
   const CLICKABLE =
     "a[href], button:not(:disabled), [role=button], [role=tab], summary, label[for], .chip, .code-btn";
   const NATIVE =
-    "input, textarea, select, [contenteditable=true], canvas, iframe, video, dialog, .shelf, [data-native-cursor]";
-  const LEAN = "button, .btn, .round-btn, .icon-btn";
+    "input, textarea, select, [contenteditable=true], canvas:not(.mx-trail), iframe, video, [data-native-cursor]";
+  const LEAN = "button.btn, button.round-btn, button.icon-btn, a.btn";
+  const WAVE = ".sx-intro.sx-play";
 
   // =============================================================================
-  // The pointer's look. White with "difference" blending, so it shows dark on the paper
-  // and light on dark buttons.
+  // Small arrows drawn inside the pointer over the course books.
+  // =============================================================================
+  const ARROW = {
+    back: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+    next: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
+    open: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg>',
+  };
+
+  // =============================================================================
+  // The pointer's look: a small drop of liquid glass, like Apple's. It bends and
+  // brightens what is under it, with a light rim and a soft shadow, and a tiny ink dot
+  // marks the exact mouse position. Over a button the glass stretches into the
+  // button's shape. Over the books it is a solid ink circle with an arrow (yellow for
+  // "open"). The trail is white with "difference" blending, so it shows on any colour.
   // =============================================================================
   const CSS = `
-    html.mx-cursor :where(body, body *:not(input, textarea, select, [contenteditable=true], canvas, iframe, video, dialog, dialog *, .shelf, .shelf *, [data-native-cursor], [data-native-cursor] *)) { cursor: none !important; }
-    .mx-cur { position: fixed; left: 0; top: 0; width: 10px; height: 10px; border-radius: 999px; box-sizing: border-box;
-      background: #fff; border: 0 solid #fff; mix-blend-mode: difference; pointer-events: none; z-index: 2147483000;
-      will-change: transform, width, height; transition: background-color .2s, border-width .2s, opacity .2s; }
-    .mx-cur.ring { background: rgba(255, 255, 255, .08); border-width: 2px; }
-    .mx-cur.hide { opacity: 0; }`;
+    html.mx-cursor :where(body, body *:not(input, textarea, select, [contenteditable=true], canvas:not(.mx-trail), iframe, video, [data-native-cursor], [data-native-cursor] *)) { cursor: none !important; }
+    .mx-cur { position: fixed; left: 0; top: 0; width: 44px; height: 44px; border-radius: 999px; box-sizing: border-box;
+      display: grid; place-items: center; color: transparent; overflow: hidden; pointer-events: none; z-index: 2147483000;
+      background: rgba(251, 250, 246, .10);
+      -webkit-backdrop-filter: blur(.6px) saturate(1.7) brightness(1.06); backdrop-filter: var(--mx-glass, blur(.6px) saturate(1.7) brightness(1.06));
+      box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, .95), inset 0 -1px 1px rgba(255, 255, 255, .45), inset 0 0 0 .6px rgba(255, 255, 255, .75),
+        inset 0 0 14px rgba(255, 255, 255, .28), 0 12px 28px -12px rgba(20, 20, 20, .45), 0 1px 2px rgba(20, 20, 20, .14);
+      will-change: transform, width, height; transition: background-color .25s, opacity .2s, color .2s, box-shadow .25s; }
+    .mx-cur::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+      background: radial-gradient(circle at var(--mx, 35%) var(--my, 28%), rgba(255, 255, 255, .55), rgba(255, 255, 255, 0) 55%); mix-blend-mode: soft-light; }
+    .mx-cur.ring { background: rgba(251, 250, 246, .06); }
+    .mx-cur.solid, .mx-cur.open { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: 0 8px 24px rgba(20, 20, 20, .25); }
+    .mx-cur.solid { background: #141414; color: #F3F0E8; }
+    .mx-cur.open { background: #FFE45C; color: #141414; }
+    .mx-cur.solid::after, .mx-cur.open::after { display: none; }
+    .mx-pin { position: fixed; left: 0; top: 0; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #fff;
+      mix-blend-mode: difference; pointer-events: none; z-index: 2147483001; transition: opacity .2s; }
+    .mx-pin.off { opacity: 0; }
+    .mx-cur.hide, .mx-cur.hide + .mx-pin, html:not(.mx-cursor) :is(.mx-cur, .mx-pin, .mx-trail) { opacity: 0; }
+    .mx-trail { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 2147482999; mix-blend-mode: difference; }
+    .sx-on .mx-wave .ch { animation: mx-wave 520ms cubic-bezier(.23, 1, .32, 1) both; animation-delay: calc(min(var(--i), 30) * 18ms); }
+    @keyframes mx-wave { 40% { transform: translateY(-0.09em) rotate(calc(var(--r) * .35)); } to { transform: none; } }
+    :is(h1, h2, .course-title) .serif { background-image: linear-gradient(currentColor, currentColor); background-repeat: no-repeat;
+      background-size: 0% .055em; background-position: 0 94%; -webkit-box-decoration-break: clone; box-decoration-break: clone;
+      transition: background-size .5s cubic-bezier(.23, 1, .32, 1); }
+    [dir=rtl] :is(h1, h2, .course-title) .serif { background-position: 100% 94%; }
+    :is(h1, h2, .course-title):hover .serif { background-size: 100% .055em; }`;
+
+  // =============================================================================
+  // The lens that makes the glass bend what is behind it (Chrome and Edge only; other
+  // browsers get the same glass without the bending). For the glass's current shape we
+  // draw a small picture that tells each point where to look: near the rim it looks a
+  // little further in, so the edge seems to curve like a drop of water, and the middle
+  // magnifies slightly. The picture is redrawn when the glass changes shape.
+  // =============================================================================
+  function addLens() {
+    if (!navigator.userAgentData?.brands?.some((b) => /Chrom/.test(b.brand)))
+      return null;
+    const SCALE = 28,
+      RIM = 14,
+      PULL = 9,
+      MAG = 0.07;
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", "0");
+    svg.setAttribute("height", "0");
+    svg.setAttribute("aria-hidden", "true");
+    svg.style.position = "absolute";
+    svg.innerHTML = `<filter id="mx-lens" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" x="0" y="0" width="44" height="44" color-interpolation-filters="sRGB">
+      <feImage x="0" y="0" width="44" height="44" preserveAspectRatio="none" result="map"/>
+      <feDisplacementMap in="SourceGraphic" in2="map" scale="${SCALE}" xChannelSelector="R" yChannelSelector="G"/></filter>`;
+    document.body.appendChild(svg);
+    const filter = svg.querySelector("filter"),
+      image = svg.querySelector("feImage");
+    const c = document.createElement("canvas"),
+      g = c.getContext("2d");
+
+    // Draws the lens picture for a rounded rectangle w × h with corner radius r.
+    function draw(w, h, r) {
+      const cw = Math.max(2, Math.round(w / 2)),
+        ch = Math.max(2, Math.round(h / 2));
+      c.width = cw;
+      c.height = ch;
+      const img = g.createImageData(cw, ch),
+        hw = w / 2,
+        hh = h / 2;
+      r = Math.min(r, hw, hh);
+      for (let y = 0; y < ch; y++)
+        for (let x = 0; x < cw; x++) {
+          const px = ((x + 0.5) / cw) * w - hw,
+            py = ((y + 0.5) / ch) * h - hh;
+          // How far this point is from the edge, and which way is "out".
+          const qx = Math.abs(px) - (hw - r),
+            qy = Math.abs(py) - (hh - r);
+          let nx, ny, dist;
+          if (qx > 0 && qy > 0) {
+            const l = Math.hypot(qx, qy) || 1;
+            nx = qx / l;
+            ny = qy / l;
+            dist = r - l;
+          } else if (qx > qy) {
+            nx = 1;
+            ny = 0;
+            dist = r - qx;
+          } else {
+            nx = 0;
+            ny = 1;
+            dist = r - qy;
+          }
+          nx *= Math.sign(px) || 1;
+          ny *= Math.sign(py) || 1;
+          const k = Math.pow(Math.max(0, 1 - dist / RIM), 2);
+          const ox = -nx * k * PULL - px * MAG,
+            oy = -ny * k * PULL - py * MAG;
+          const i = (y * cw + x) * 4;
+          img.data[i] = 128 + (ox / SCALE) * 255;
+          img.data[i + 1] = 128 + (oy / SCALE) * 255;
+          img.data[i + 2] = 128;
+          img.data[i + 3] = 255;
+        }
+      g.putImageData(img, 0, 0);
+      image.setAttribute("href", c.toDataURL());
+      for (const el of [filter, image]) {
+        el.setAttribute("width", w.toFixed(0));
+        el.setAttribute("height", h.toFixed(0));
+      }
+    }
+    document.documentElement.style.setProperty(
+      "--mx-glass",
+      "url(#mx-lens) blur(.35px) saturate(1.7) brightness(1.06)",
+    );
+    return draw;
+  }
 
   // =============================================================================
   // Starts the pointer once the page is ready.
@@ -253,62 +376,165 @@ var Motion = (() => {
     const cur = document.createElement("div");
     cur.className = "mx-cur";
     cur.setAttribute("aria-hidden", "true");
-    document.body.appendChild(cur);
-    document.documentElement.classList.add("mx-cursor");
+    const trail = document.createElement("canvas");
+    trail.className = "mx-trail";
+    trail.setAttribute("aria-hidden", "true");
+    const pin = document.createElement("div");
+    pin.className = "mx-pin";
+    pin.setAttribute("aria-hidden", "true");
+    document.body.append(trail, cur, pin);
+    const fitLens = addLens();
+    let lensW = 0,
+      lensH = 0;
+    const ctx = trail.getContext("2d");
+    const root = document.documentElement;
+    root.classList.add("mx-cursor");
 
-    // Where the mouse is, the button under it, and the pointer's current shape (it
-    // eases toward its target shape every frame).
+    // Where the mouse is, what is under it, and the pointer's current shape (it eases
+    // toward its target shape every frame). The trail is the pointer's last positions.
     let mx = -100,
       my = -100,
       over = null,
+      book = null,
       leaning = null,
       raf = 0,
-      first = true;
-    const now = { x: -100, y: -100, w: 10, h: 10, r: 5 };
+      first = true,
+      icon = "";
+    const now = { x: -100, y: -100, w: 44, h: 44, r: 22 },
+      points = [];
 
-    // The shape the pointer is heading for: a dot at the mouse, or the button's outline.
+    // Sizes the trail canvas to the window, sharp on high-resolution screens.
+    function size() {
+      const d = Math.min(devicePixelRatio || 1, 2);
+      trail.width = innerWidth * d;
+      trail.height = innerHeight * d;
+      ctx.setTransform(d, 0, 0, d, 0, 0);
+    }
+    size();
+    addEventListener("resize", size);
+
+    // The shape the pointer is heading for: a dot at the mouse, a round arrow over a
+    // book, or the shape of the button under the mouse.
     function target() {
+      if (book)
+        return { x: mx - 26, y: my - 26, w: 52, h: 52, r: 26, kind: book };
       if (over && over.isConnected) {
-        const b = over.getBoundingClientRect(),
-          pad = 5;
-        if (b.width < 420 && b.height < 160) {
-          const cx = b.left + b.width / 2,
+        const box = shapeOf(over);
+        if (box) {
+          const { b, pad, radius } = box,
+            cx = b.left + b.width / 2,
             cy = b.top + b.height / 2;
-          const ox = Math.max(-6, Math.min(6, (mx - cx) * 0.12)),
-            oy = Math.max(-6, Math.min(6, (my - cy) * 0.12));
-          const h = b.height + pad * 2,
-            radius =
-              parseFloat(getComputedStyle(over).borderTopLeftRadius) || 0;
+          const ox = Math.max(-3, Math.min(3, (mx - cx) * 0.06)),
+            oy = Math.max(-3, Math.min(3, (my - cy) * 0.06));
+          const h = b.height + pad * 2;
           return {
             x: b.left - pad + ox,
             y: b.top - pad + oy,
             w: b.width + pad * 2,
             h,
             r: Math.min(radius + pad, h / 2),
-            ring: true,
+            kind: "ring",
           };
         }
-        return { x: mx - 20, y: my - 20, w: 40, h: 40, r: 20, ring: true };
+        return { x: mx - 28, y: my - 28, w: 56, h: 56, r: 28, kind: "ring" };
       }
-      return { x: mx - 5, y: my - 5, w: 10, h: 10, r: 5, ring: false };
+      return { x: mx - 22, y: my - 22, w: 44, h: 44, r: 22, kind: "" };
     }
 
-    // Moves the pointer one step toward its target shape, and the button a little
-    // toward the mouse.
-    function frame() {
-      const t = target(),
+    // The outline to wrap around something clickable. A button with its own background
+    // or border is wrapped as it is drawn. A plain text link or tab is wrapped tightly
+    // around its words, not around its (larger) clickable area. Anything very big gets
+    // a round pointer instead (null).
+    function shapeOf(el) {
+      const cs = getComputedStyle(el);
+      const boxed =
+        (cs.backgroundColor !== "rgba(0, 0, 0, 0)" &&
+          cs.backgroundColor !== "transparent") ||
+        parseFloat(cs.borderTopWidth) > 0 ||
+        parseFloat(cs.borderBottomWidth) > 0;
+      let b = el.getBoundingClientRect(),
+        pad = 6,
+        radius = parseFloat(cs.borderTopLeftRadius) || 0;
+      if (!boxed) {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const t = range.getBoundingClientRect();
+        if (t.width && t.height) {
+          b = t;
+          pad = 6;
+          radius = 8;
+        }
+      }
+      return b.width < 420 && b.height < 160 ? { b, pad, radius } : null;
+    }
+
+    // Draws the trail: a thin line through the pointer's last positions that gets
+    // thinner and fainter toward its end, and is gone after a fifth of a second.
+    function drawTrail(t) {
+      ctx.clearRect(0, 0, innerWidth, innerHeight);
+      while (points.length && t - points[0].t > 200) points.shift();
+      if (points.length < 2) return false;
+      ctx.lineCap = "round";
+      for (let i = 1; i < points.length; i++) {
+        const a = points[i - 1],
+          b = points[i],
+          k = i / points.length,
+          age = 1 - (t - b.t) / 200;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${(0.55 * k * age).toFixed(3)})`;
+        ctx.lineWidth = 1 + 5 * k * age;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+      return true;
+    }
+
+    // Moves the pointer one step toward its target shape, draws the trail, and leans
+    // the button a little toward the mouse.
+    function frame(t) {
+      const tg = target(),
         k = first ? 1 : 0.28;
       first = false;
       let moving = false;
       for (const key of ["x", "y", "w", "h", "r"]) {
-        now[key] += (t[key] - now[key]) * k;
-        if (Math.abs(t[key] - now[key]) > 0.2) moving = true;
+        now[key] += (tg[key] - now[key]) * k;
+        if (Math.abs(tg[key] - now[key]) > 0.2) moving = true;
       }
       cur.style.transform = `translate(${now.x.toFixed(1)}px, ${now.y.toFixed(1)}px)`;
       cur.style.width = now.w.toFixed(1) + "px";
       cur.style.height = now.h.toFixed(1) + "px";
       cur.style.borderRadius = now.r.toFixed(1) + "px";
-      cur.classList.toggle("ring", t.ring);
+      // The lens is redrawn when the glass has changed shape by a few pixels, and once
+      // more when it settles.
+      const settled = !moving && (now.w !== lensW || now.h !== lensH);
+      if (
+        fitLens &&
+        (settled || Math.abs(now.w - lensW) > 3 || Math.abs(now.h - lensH) > 3)
+      ) {
+        lensW = now.w;
+        lensH = now.h;
+        fitLens(lensW, lensH, now.r);
+      }
+      cur.classList.toggle("ring", tg.kind === "ring");
+      pin.classList.toggle(
+        "off",
+        tg.kind === "back" || tg.kind === "next" || tg.kind === "open",
+      );
+      pin.style.transform = `translate(${mx}px, ${my}px)`;
+      // The light on the glass sits up and to the side of the mouse, so it moves with it.
+      cur.style.setProperty("--mx", (mx - now.x - 6).toFixed(0) + "px");
+      cur.style.setProperty("--my", (my - now.y - 8).toFixed(0) + "px");
+      cur.classList.toggle("solid", tg.kind === "back" || tg.kind === "next");
+      cur.classList.toggle("open", tg.kind === "open");
+      const want = ARROW[tg.kind] || "";
+      if (want !== icon) {
+        icon = want;
+        cur.innerHTML = want;
+      }
+      if (!tg.kind && moving)
+        points.push({ x: now.x + now.w / 2, y: now.y + now.h / 2, t });
+      const tail = drawTrail(t);
       if (leaning) {
         const b = leaning.getBoundingClientRect();
         const lx = Math.max(
@@ -318,7 +544,7 @@ var Motion = (() => {
           ly = Math.max(-3, Math.min(3, (my - b.top - b.height / 2) * 0.06));
         leaning.style.translate = `${lx.toFixed(1)}px ${ly.toFixed(1)}px`;
       }
-      raf = moving || over ? requestAnimationFrame(frame) : 0;
+      raf = moving || tail || over ? requestAnimationFrame(frame) : 0;
     }
     const wake = () => {
       if (!raf) raf = requestAnimationFrame(frame);
@@ -333,21 +559,59 @@ var Motion = (() => {
       over = null;
     }
 
+    // Which arrow to show over a course book: back for a book on the left, next for a
+    // book on the right, open for the book in front.
+    function bookKind(el) {
+      const b = el?.closest(".shelf .book");
+      if (!b || b.closest(".shelf.dragging")) return null;
+      return b.classList.contains("is-active")
+        ? "open"
+        : b.classList.contains("to-left")
+          ? "back"
+          : b.classList.contains("to-right")
+            ? "next"
+            : null;
+    }
+
+    // The title under the mouse plays a small wave, once each time the mouse comes onto it.
+    let waved = null;
+    function wave(el) {
+      const t = el?.closest(WAVE) || null;
+      if (t === waved) return;
+      waved = t;
+      if (!t) return;
+      t.classList.remove("mx-wave");
+      void t.offsetWidth;
+      t.classList.add("mx-wave");
+      setTimeout(() => t.classList.remove("mx-wave"), 1300);
+    }
+
     addEventListener(
       "pointermove",
       (e) => {
         if (e.pointerType !== "mouse") return;
         mx = e.clientX;
         my = e.clientY;
+        // While a dialog is open the custom pointer steps aside (a dialog always sits on
+        // top of everything, so the dot could not show above it).
+        const modal = document.querySelector("dialog[open]");
+        root.classList.toggle("mx-cursor", !modal);
+        if (modal) {
+          release();
+          book = null;
+          return;
+        }
         const el = e.target instanceof Element ? e.target : null;
         const native = el?.closest(NATIVE);
         cur.classList.toggle("hide", !!native);
-        const hit = native ? null : el?.closest(CLICKABLE) || null;
+        book = native ? null : bookKind(el);
+        const hit = native || book ? null : el?.closest(CLICKABLE) || null;
         if (hit !== over) {
           release();
           over = hit;
           if (hit && hit.matches(LEAN)) leaning = hit;
         }
+        wave(el);
         wake();
       },
       { passive: true },
@@ -356,17 +620,45 @@ var Motion = (() => {
     document.addEventListener("pointerleave", () => {
       cur.classList.add("hide");
       release();
+      book = null;
       wake();
     });
     document.addEventListener("pointerenter", () =>
       cur.classList.remove("hide"),
     );
-    addEventListener("pointerdown", () =>
-      cur.animate([{ scale: 1 }, { scale: 0.9 }, { scale: 1 }], {
-        duration: 260,
-        easing: "cubic-bezier(.23, 1, .32, 1)",
-      }),
-    );
+    addEventListener("pointerdown", () => {
+      if (!over)
+        cur.animate([{ scale: 1 }, { scale: 0.85 }, { scale: 1 }], {
+          duration: 240,
+          easing: "cubic-bezier(.23, 1, .32, 1)",
+        });
+    });
+    // When the page changes, the pointer is hidden first, so it is not caught in the
+    // picture of the old page that slides away (and does not jump on the new one).
+    const away = () => {
+      cur.style.display = pin.style.display = trail.style.display = "none";
+      release();
+    };
+    addEventListener("pageswap", away);
+    addEventListener("pagehide", away);
+    addEventListener("pageshow", (e) => {
+      if (e.persisted)
+        cur.style.display = pin.style.display = trail.style.display = "";
+    });
+    // The moment a dialog opens the normal pointer comes back, and when it closes the
+    // custom pointer returns.
+    new MutationObserver(() => {
+      const open = !!document.querySelector("dialog[open]");
+      root.classList.toggle("mx-cursor", !open);
+      if (open) {
+        release();
+        book = null;
+      }
+    }).observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["open"],
+    });
   }
   if (document.readyState === "loading")
     addEventListener("DOMContentLoaded", start);
