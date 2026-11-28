@@ -30,3 +30,6 @@ We wanted no server of our own to run or pay for, and no build step. So the site
 | A fixed QR code, or one that changes every 30 seconds | A photo sent to a friend works from home. A code that changes 5 times a second and must be filmed live doesn't |
 | One shared AI key on a server | We would pay for it and have to protect it. Each lecturer's own free key costs us nothing |
 
+## Do our tests catch real bugs?
+
+We broke the code on purpose twice. First, we let the database accept a sped-up video. Second, we counted a first check as "partial" while the second check was still open. Both times, exactly one test failed (TC-08 and TC-53). So the tests catch real mistakes.
