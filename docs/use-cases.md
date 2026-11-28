@@ -54,3 +54,28 @@ flowchart LR
 7. The database runs every check and saves the result.
 8. The phone shows a tick for each check, and the count on the projector goes up.
 
+**When something goes wrong**
+
+- Attendance is paused or closed (step 2): the phone says so and stops.
+- The student isn't on the list (step 2): "You are not on the list for this course".
+- No code is seen for 15 seconds (step 4): "Can't see the code", with **Try again**.
+- A check fails, for example a different network (step 7): the phone shows which check failed and offers **Try again** or **Ask the lecturer** (UC-07).
+- The student already checked in this round (step 7): "Already checked in".
+
+```mermaid
+flowchart LR
+  A((start)) --> B[Tap Check in]
+  B --> C{Attendance open<br/>and on the list?}
+  C -- no --> X[Show the reason] --> Z1((end))
+  C -- yes --> D[Measure the connection]
+  D --> E[Read frames from the projector]
+  E --> F{6+ frames<br/>within 15 s?}
+  F -- no --> Y[Can't see the code:<br/>offer Try again] --> Z2((end))
+  F -- yes --> G[Send frames, timing, location]
+  G --> H{All checks pass?}
+  H -- yes --> I[Save attendance,<br/>show ticks] --> Z3((end))
+  H -- no --> J[Save blocked attempt,<br/>show the failed check] --> K{Ask the lecturer?}
+  K -- yes --> L[UC-07 request] --> Z4((end))
+  K -- no --> Z5((end))
+```
+
