@@ -217,8 +217,8 @@ var Motion = (() => {
 // it as it moves. Near anything you can click (a button, a tab, a link, a course book),
 // a tag, or a word that is already highlighted in yellow, and while you select text,
 // it turns into a yellow highlighter, its line turns yellow, and the thing under it
-// gets highlighted. Big
-// titles do a small wave when the mouse passes over them.
+// gets highlighted. Over the course books it becomes a 3D torch that lights the cover
+// where you point. Big titles do a small wave when the mouse passes over them.
 // While a dialog is open, and over text boxes and drawing areas, the normal pointer
 // is used. Off on phones and tablets, for reduced motion, and on the dark screens
 // (scan and projector).
@@ -265,6 +265,7 @@ var Motion = (() => {
   const FILLED =
     ".btn-primary, .btn-dark, .btn-accent, .btn-hl, .btn-destructive, .round-btn.fill";
   const CSS = `
+    html.mx-cursor, html.mx-cursor::view-transition { cursor: none !important; }
     html.mx-cursor :where(body, body *:not(input, textarea, select, [contenteditable=true], canvas:not(.mx-trail), iframe, video, [data-native-cursor], [data-native-cursor] *)) { cursor: none !important; }
     .mx-pen { position: fixed; left: 0; top: 0; width: 0; height: 0; pointer-events: none; z-index: 2147483001; will-change: transform; transition: opacity .2s; }
     .mx-pen svg { position: absolute; left: 0; top: 0; overflow: visible; transform-origin: 0 0; filter: drop-shadow(0 3px 4px rgba(20, 20, 20, .18));
@@ -294,13 +295,203 @@ var Motion = (() => {
     html.mx-cursor :is(.btn, .round-btn) { transition: background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .25s ease, translate .25s ${EASE}, transform .16s ${EASE}; }`;
 
   // =============================================================================
+  // The torch over the course books: a grey metal flashlight built from real 3D pieces
+  // (a bezel around the lens, a head that curves in to the neck, a switch hole, a grip
+  // with cut grooves, a smooth body and a knurled tail cap). Each side is shaded by how
+  // much it faces a light above and to the left, and the shading is redrawn as the
+  // torch turns, so it looks solid from every angle. It is held in front of the chosen
+  // book: aimed at the middle you see only its end, and as you move away it leans and
+  // its side and head come into view.
+  // =============================================================================
+  const TORCH_CSS = `
+    .mx-torch { position: fixed; inset: 0; pointer-events: none; z-index: 2147483001; perspective: 1100px; transform-style: preserve-3d; opacity: 0; transition: opacity .12s ease; }
+    html.mx-lamp .mx-torch { opacity: 1; }
+    html.mx-lamp .mx-pen { opacity: 0; transition-duration: .08s; }
+    .mx-torch > div { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-style: preserve-3d; }
+    .mx-torch i { position: absolute; display: block; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+    .mx-torch i.beam { background: linear-gradient(to bottom, rgba(255, 240, 180, 0), rgba(255, 240, 180, .06) 50%, rgba(255, 244, 200, .2)); }
+    .mx-torch i.lens { border-radius: 50%; box-shadow: 0 0 22px 8px rgba(255, 240, 190, .55);
+      background: radial-gradient(circle, #FFF 0 12%, #FFF6D6 20%, #D9DBE0 32%, #F4F4F2 44%, #AEB1B8 58%, #E8E9EC 72%, #8D9096 86%, #6E7176 100%); }
+    .mx-torch i.grip { background-image: repeating-linear-gradient(0deg, rgba(0, 0, 0, .28) 0 1.5px, rgba(255, 255, 255, .08) 1.5px 2.5px, transparent 2.5px 6px),
+      linear-gradient(90deg, rgba(0, 0, 0, .3) 0 1px, transparent 1px calc(100% - 1px), rgba(255, 255, 255, .12) calc(100% - 1px)); }
+    .mx-torch i.knurl { background-image: repeating-linear-gradient(90deg, rgba(0, 0, 0, .3) 0 1px, transparent 1px 2.2px); }
+    .mx-torch i.bezel { background-image: linear-gradient(0deg, rgba(0, 0, 0, .25), transparent 40%, rgba(255, 255, 255, .15)); }
+    .mx-torch i.cap { border-radius: 50%; background-image: radial-gradient(circle, rgba(0, 0, 0, .18) 0 40%, transparent 42% 78%, rgba(0, 0, 0, .25) 80%), repeating-conic-gradient(rgba(0, 0, 0, .18) 0 4deg, transparent 4deg 8deg); }
+    .mx-torch i.plug { border-radius: 50%; background: #5D5F64; backface-visibility: visible; -webkit-backface-visibility: visible; }
+    .mx-torch i.hole { width: 8px; height: 6px; left: -4px; top: -3px; border-radius: 50%; background: #1F2023; }
+    .cover-front > .mx-shade, .cover-front > .mx-light { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .25s ease; border-radius: inherit; }
+    .cover-front > .mx-shade { background: radial-gradient(circle at var(--lx, 50%) var(--ly, 50%), transparent 0 70px, rgba(5, 10, 40, .42) 210px); }
+    .cover-front > .mx-light { mix-blend-mode: screen; background: radial-gradient(circle at var(--lx, 50%) var(--ly, 50%), rgba(255, 250, 225, .85) 0, rgba(255, 246, 210, .45) 26px, rgba(255, 240, 200, .12) 80px, transparent 130px); }
+    .book.new .cover-front > .mx-shade { background: radial-gradient(circle at var(--lx, 50%) var(--ly, 50%), transparent 0 70px, rgba(20, 20, 20, .16) 210px); }
+    .book.new .cover-front > .mx-light { mix-blend-mode: normal; background: radial-gradient(circle at var(--lx, 50%) var(--ly, 50%), rgba(255, 236, 150, .5) 0, rgba(255, 236, 150, .2) 30px, transparent 110px); }
+    .cover-front.mx-lit > .mx-shade, .cover-front.mx-lit > .mx-light { opacity: 1; }`;
+  function makeTorch() {
+    const layer = document.createElement("div");
+    layer.className = "mx-torch";
+    layer.setAttribute("aria-hidden", "true");
+    const T = document.createElement("div");
+    layer.append(T);
+    const N = 24,
+      GAP = 90,
+      SIZE = 0.78,
+      parts = [];
+    const MET = [150, 152, 157],
+      DARK = [118, 120, 125],
+      LIGHT = norm([-0.45, -0.7, 0.55]);
+    function norm(v) {
+      const l = Math.hypot(v[0], v[1], v[2]) || 1;
+      return [v[0] / l, v[1] / l, v[2] / l];
+    }
+    const cross = (a, b) => [
+      a[1] * b[2] - a[2] * b[1],
+      a[2] * b[0] - a[0] * b[2],
+      a[0] * b[1] - a[1] * b[0],
+    ];
+    const piece = (cls) => {
+      const el = document.createElement("i");
+      if (cls) el.className = cls;
+      T.append(el);
+      return el;
+    };
+    // A ring of flat sides around the torch's axis, from y0 to y1, radius r0 at y0 and r1 at y1.
+    function ring(y0, y1, r0, r1, color, cls, n = N) {
+      const h = y1 - y0,
+        rm = (r0 + r1) / 2,
+        slant = Math.hypot(h, r0 - r1),
+        tilt = Math.atan2(r0 - r1, h);
+      for (let k = 0; k < n; k++) {
+        const phi = (k * 2 * Math.PI) / n,
+          w = (2 * Math.PI * Math.max(r0, r1)) / n + 1.1,
+          el = piece(cls);
+        Object.assign(el.style, {
+          width: w + "px",
+          height: slant + 1.6 + "px",
+          left: -w / 2 + "px",
+          top: y0 + h / 2 - slant / 2 - 0.8 + "px",
+          transform: `rotateY(${phi}rad) translateZ(${rm}px) rotateX(${-tilt}rad)`,
+        });
+        if (cls === "beam") {
+          const top = (r1 / Math.max(r0, r1)) * 50,
+            bot = (r0 / Math.max(r0, r1)) * 50;
+          el.style.clipPath = `polygon(${50 - bot}% 0, ${50 + bot}% 0, ${50 + top}% 100%, ${50 - top}% 100%)`;
+        }
+        if (color)
+          parts.push({
+            el,
+            n: [Math.sin(phi), -Math.sin(tilt), Math.cos(phi)],
+            color,
+          });
+      }
+    }
+    // A flat round disc across the axis at y.
+    function disc(y, r, cls, color, facesLens) {
+      const el = piece(cls);
+      Object.assign(el.style, {
+        width: 2 * r + "px",
+        height: 2 * r + "px",
+        left: -r + "px",
+        top: -r + "px",
+        transform: `translateY(${y}px) rotateX(${facesLens ? 90 : -90}deg)`,
+      });
+      if (color) parts.push({ el, n: [0, facesLens ? -1 : 1, 0], color });
+    }
+    // The lens is at y = 0 and the torch runs toward +y; the light runs toward -y, to the book.
+    ring(-GAP, 0, 76, 18, null, "beam", 40);
+    ring(0, 5, 19.5, 19.5, DARK, "bezel");
+    ring(5, 9, 19.5, 19, MET);
+    ring(9, 20, 19, 17, MET);
+    ring(20, 30, 17, 13.5, MET);
+    ring(30, 38, 13.5, 11.5, MET);
+    ring(38, 56, 11.5, 11.5, MET);
+    ring(56, 100, 12, 12, MET, "grip");
+    ring(100, 122, 11.5, 11.5, MET);
+    ring(122, 133, 12.3, 12.3, DARK, "knurl");
+    // Solid discs inside, so no gap ever shows through it from any angle.
+    for (const [y, rad] of [
+      [3, 19],
+      [20, 16.8],
+      [38, 11.3],
+      [56, 11.3],
+      [100, 11.3],
+      [122, 11.3],
+      [132.5, 12],
+    ]) {
+      const el = piece("plug");
+      Object.assign(el.style, {
+        width: 2 * rad + "px",
+        height: 2 * rad + "px",
+        left: -rad + "px",
+        top: -rad + "px",
+        transform: `translateY(${y}px) rotateX(90deg)`,
+      });
+    }
+    disc(133, 12.6, "cap", DARK, false);
+    disc(0.5, 18, "lens", null, true);
+    piece("hole").style.transform = "translateY(44px) translateZ(11.7px)";
+
+    // Which way the torch points (eased toward where it should), and where the hand is.
+    const aim = [0, 0, 1],
+      hand = [0, 0, 300];
+    let handSet = false;
+    // Puts the torch in place: held at (hx, hy), in front of the screen, and pointing at
+    // (x, y) on the book. Returns true while it is still turning.
+    function place(hx, hy, x, y) {
+      if (!handSet) {
+        hand[0] = hx;
+        hand[1] = hy;
+        handSet = true;
+      }
+      hand[0] += (hx - hand[0]) * 0.2;
+      hand[1] += (hy - hand[1]) * 0.2;
+      layer.style.perspectiveOrigin = `${hand[0].toFixed(0)}px ${hand[1].toFixed(0)}px`;
+      const want = norm([hand[0] - x, hand[1] - y, hand[2]]);
+      for (let i = 0; i < 3; i++) aim[i] += (want[i] - aim[i]) * 0.22;
+      const Y = norm(aim),
+        X = norm(cross(Math.abs(Y[1]) > 0.95 ? [1, 0, 0] : [0, 1, 0], Y)),
+        Z = cross(X, Y);
+      const L = [
+        x + Y[0] * GAP * SIZE,
+        y + Y[1] * GAP * SIZE,
+        Y[2] * GAP * SIZE,
+      ];
+      T.style.transform = `matrix3d(${[...X.map((v) => v * SIZE), 0, ...Y.map((v) => v * SIZE), 0, ...Z.map((v) => v * SIZE), 0, ...L, 1].join(",")})`;
+      for (const p of parts) {
+        const n = [0, 1, 2].map(
+          (i) => X[i] * p.n[0] + Y[i] * p.n[1] + Z[i] * p.n[2],
+        );
+        const d = Math.max(
+            0,
+            n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2],
+          ),
+          k = 0.55 + 0.6 * d,
+          spec = Math.pow(d, 18) * 0.55;
+        p.el.style.backgroundColor = `rgb(${p.color.map((v) => Math.min(255, Math.round(v * k + 255 * spec)))})`;
+      }
+      return (
+        Math.abs(want[0] - aim[0]) + Math.abs(want[1] - aim[1]) > 0.002 ||
+        Math.abs(hx - hand[0]) + Math.abs(hy - hand[1]) > 0.5
+      );
+    }
+    return {
+      layer,
+      place,
+      reset: () => {
+        handSet = false;
+      },
+    };
+  }
+
+  // =============================================================================
   // Starts the pointer once the page is ready.
   // =============================================================================
   function start() {
-    if (!fine || reduce || document.body.classList.contains("dark-screen"))
+    // Where this pointer is not used, the normal one shows (see the end of style.css).
+    if (!fine || reduce || document.body.classList.contains("dark-screen")) {
+      document.documentElement.classList.add("mx-off");
       return;
+    }
     const style = document.createElement("style");
-    style.textContent = CSS;
+    style.textContent = CSS + TORCH_CSS;
     document.head.appendChild(style);
     const pen = document.createElement("div");
     pen.className = "mx-pen";
@@ -312,7 +503,8 @@ var Motion = (() => {
     const trail = document.createElement("canvas");
     trail.className = "mx-trail";
     trail.setAttribute("aria-hidden", "true");
-    document.body.append(mark, trail, pen);
+    const torch = makeTorch();
+    document.body.append(mark, trail, pen, torch.layer);
     const ctx = trail.getContext("2d");
     const root = document.documentElement;
     root.classList.add("mx-cursor");
@@ -473,10 +665,21 @@ var Motion = (() => {
       pen.style.transform = `translate(${mx}px, ${my}px) rotate(${(-tilt * 0.5).toFixed(1)}deg)`;
       pen.classList.toggle("hide", native);
       const prev = points[points.length - 1];
-      if (!native && (!prev || Math.hypot(mx - prev.x, my - prev.y) > 0.5))
+      if (
+        !native &&
+        !lamp &&
+        (!prev || Math.hypot(mx - prev.x, my - prev.y) > 0.5)
+      )
         points.push({ x: mx, y: my, t });
       const tail = drawTrail(t);
-      raf = tail || Math.abs(tilt) > 0.3 ? requestAnimationFrame(frame) : 0;
+      // The torch follows every frame while it is on, since the books float and turn.
+      if (lamp && chosen) {
+        const r = chosen.getBoundingClientRect();
+        torch.place(r.left + r.width / 2, r.top + r.height / 2, mx, my);
+        if (lit) light(lit);
+      }
+      raf =
+        tail || lamp || Math.abs(tilt) > 0.3 ? requestAnimationFrame(frame) : 0;
     }
     const wake = () => {
       if (!raf) raf = requestAnimationFrame(frame);
@@ -495,18 +698,106 @@ var Motion = (() => {
       setTimeout(() => t.classList.remove("mx-wave"), 1300);
     }
 
+    // The torch is on while the mouse is on a course book, or in the gap between two
+    // books side by side (so you can move across to the next book and pick it). Past a
+    // book with nothing beside it, it is the pencil again at once. "lit" is the book
+    // cover under the mouse, "chosen" the book in front.
+    let lamp = false,
+      lit = null,
+      chosen = null;
+    function bookZone(x, y) {
+      const shelf = document.querySelector(".shelf");
+      if (
+        !shelf ||
+        shelf.classList.contains("dragging") ||
+        shelf.classList.contains("opening")
+      )
+        return null;
+      const covers = [
+        ...shelf.querySelectorAll(".book:not(.far) .cover-front"),
+      ];
+      if (!covers.length) return null;
+      const rects = covers.map((c) => c.getBoundingClientRect());
+      const at = (r) =>
+        x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+      const i = rects.findIndex(at);
+      const front =
+        shelf.querySelector(".book.is-active .cover-front") || covers[0];
+      if (i >= 0) return { hit: covers[i], front };
+      const order = rects
+        .map((r, k) => k)
+        .filter((k) => rects[k].width > 20)
+        .sort((a, b) => rects[a].left - rects[b].left);
+      for (let k = 1; k < order.length; k++) {
+        const A = rects[order[k - 1]],
+          B = rects[order[k]];
+        if (
+          x > A.right &&
+          x < B.left &&
+          y > Math.max(A.top, B.top) &&
+          y < Math.min(A.bottom, B.bottom)
+        )
+          return { hit: null, front };
+      }
+      return null;
+    }
+    // Lights the cover under the mouse where the mouse is.
+    function light(cover) {
+      if (lit && lit !== cover) lit.classList.remove("mx-lit");
+      lit = cover;
+      if (!cover) return;
+      if (!cover.querySelector(":scope > .mx-light"))
+        cover.insertAdjacentHTML(
+          "beforeend",
+          '<span class="mx-shade"></span><span class="mx-light"></span>',
+        );
+      const r = cover.getBoundingClientRect();
+      cover.style.setProperty(
+        "--lx",
+        (((mx - r.left) / r.width) * 100).toFixed(1) + "%",
+      );
+      cover.style.setProperty(
+        "--ly",
+        (((my - r.top) / r.height) * 100).toFixed(1) + "%",
+      );
+      cover.classList.add("mx-lit");
+    }
+    function setLamp(zone) {
+      const on = !!zone;
+      chosen = zone?.front || null;
+      light(zone?.hit || null);
+      if (on === lamp) return;
+      lamp = on;
+      root.classList.toggle("mx-lamp", on);
+      // Out of the books it is the pencil at once (no highlighter in between).
+      clearTimeout(leaveT);
+      leaveT = 0;
+      near = false;
+      pen.classList.remove("hl");
+      if (on) torch.reset();
+      else points.length = 0;
+    }
+
     // Works out everything from what is under the mouse right now.
     function update(el) {
       // While a dialog is open the normal pointer is used (a dialog always sits on top
       // of everything, so the pencil could not show above it).
       const modal = document.querySelector("dialog[open]");
       root.classList.toggle("mx-cursor", !modal);
+      root.classList.toggle("mx-off", !!modal);
       if (modal) {
+        setLamp(null);
         setNear(false);
         setUnder(null);
         return;
       }
       native = !!el?.closest(NATIVE);
+      setLamp(native ? null : bookZone(mx, my));
+      if (lamp) {
+        setUnder(null);
+        wake();
+        return;
+      }
       setNear(!native && isNear(el, mx, my));
       setUnder(native ? null : el?.closest(UNDERLINE) || null);
       wave(el);
@@ -569,6 +860,7 @@ var Motion = (() => {
     document.addEventListener("pointerleave", () => {
       pen.classList.add("hide");
       setUnder(null);
+      setLamp(null);
       points.length = 0;
       wake();
     });
@@ -580,7 +872,11 @@ var Motion = (() => {
     // picture of the old page that slides away, and its place is kept so the next page
     // starts with the pointer exactly there (already a highlighter if it is on a tab).
     const away = () => {
-      pen.style.display = trail.style.display = mark.style.display = "none";
+      pen.style.display =
+        trail.style.display =
+        mark.style.display =
+        torch.layer.style.display =
+          "none";
       try {
         if (mx > -50)
           sessionStorage.setItem(
@@ -593,7 +889,11 @@ var Motion = (() => {
     addEventListener("pagehide", away);
     addEventListener("pageshow", (e) => {
       if (e.persisted)
-        pen.style.display = trail.style.display = mark.style.display = "";
+        pen.style.display =
+          trail.style.display =
+          mark.style.display =
+          torch.layer.style.display =
+            "";
     });
     try {
       const spot = JSON.parse(sessionStorage.getItem(SPOT) || "null");
@@ -621,6 +921,7 @@ var Motion = (() => {
     new MutationObserver(() => {
       const open = !!document.querySelector("dialog[open]");
       root.classList.toggle("mx-cursor", !open);
+      root.classList.toggle("mx-off", open);
       if (open) {
         setNear(false);
         setUnder(null);
