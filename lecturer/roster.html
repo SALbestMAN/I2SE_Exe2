@@ -401,7 +401,7 @@
         // =============================================================================
         const STATUS = {
           listed: '<span class="chip">On the list</span>',
-          joined: '<span class="chip ok">Joined the app</span>',
+          joined: `<span class="chip ok">${{ he: "הצטרף לקורס", ar: "انضم إلى المساق" }[window.I18N?.lang] || "Joined the course"}</span>`,
           request: '<span class="chip warn">Wants to join</span>',
         };
 
