@@ -213,13 +213,11 @@ var Motion = (() => {
 })();
 
 // =============================================================================
-// The mouse pointer on the light pages. The pointer is a small drop of liquid glass
-// that follows the mouse smoothly and leaves a short, thin trail behind it. Over a
-// button or a link the glass stretches into the button's own shape, as if selecting
-// it, and the button leans slightly toward the mouse. Over the course books it
-// becomes a round arrow (back, next, or open). Big titles do a small wave when the
-// mouse passes over them, and in other titles a thin line draws itself under the
-// words in italics.
+// The mouse pointer on the light pages: a pencil. It writes a thin, short line behind
+// it as it moves. Near a button, a tab, a link or a word that is already highlighted
+// in yellow, it turns into a yellow highlighter, its line turns yellow, and the thing
+// under it gets highlighted. Over the course books it becomes a round arrow (back,
+// next, or open). Big titles do a small wave when the mouse passes over them.
 // While a dialog is open, and over text boxes and drawing areas, the normal pointer
 // is used. Off on phones and tablets, for reduced motion, and on the dark screens
 // (scan and projector).
@@ -228,15 +226,27 @@ var Motion = (() => {
   const fine = matchMedia("(hover: hover) and (pointer: fine)").matches;
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const CLICKABLE =
-    "a[href], button:not(:disabled), [role=button], [role=tab], summary, label[for], .chip, .code-btn";
+    "a[href], button:not(:disabled), [role=button], [role=tab], summary, label[for], .code-btn";
   const NATIVE =
     "input, textarea, select, [contenteditable=true], canvas:not(.mx-trail), iframe, video, [data-native-cursor]";
-  const LEAN = "button.btn, button.round-btn, button.icon-btn, a.btn";
   const WAVE = ".sx-intro.sx-play";
+  // Words that are already highlighted in yellow (like the one word in each big title):
+  // the pencil turns into the highlighter over them too.
+  const MARKED = ".hl:not(.avatar)";
+  // How close counts as "near" a button: a lot sideways, very little up and down.
+  const PAD_X = 22,
+    PAD_Y = 4;
 
   // =============================================================================
-  // Small arrows drawn inside the pointer over the course books.
+  // The pencil and the highlighter. Both are drawn tilted, with the tip at the
+  // exact mouse position, so the tip stays in place when one turns into the other.
   // =============================================================================
+  const PENCIL =
+    '<svg class="mx-pencil" width="14" height="58" viewBox="0 0 14 58"><g transform="rotate(35) translate(-7 -58)"><path d="M7 58 L4.6 52 H9.4 Z" fill="#141414"/><path d="M4.6 52 L1 42 H13 L9.4 52 Z" fill="#E6C9A0" stroke="#141414" stroke-width=".8"/><rect x="1" y="12" width="12" height="30" fill="#FFE45C" stroke="#141414" stroke-width="1"/><path d="M5 12 V42 M9 12 V42" stroke="#141414" stroke-opacity=".25"/><rect x="1" y="7" width="12" height="5" fill="#B5B0A6" stroke="#141414" stroke-width="1"/><rect x="1" y="0" width="12" height="7" rx="3" fill="#2440E6" stroke="#141414" stroke-width="1"/></g></svg>';
+  const MARKER =
+    '<svg class="mx-marker" width="18" height="56" viewBox="0 0 18 56"><g transform="rotate(35) translate(-6 -56)"><path d="M6 56 L13 50 V45 H3 V52 Z" fill="#FFE45C" stroke="#141414" stroke-width="1"/><rect x="2" y="40" width="14" height="5" fill="#141414"/><rect x="1" y="8" width="16" height="32" rx="3" fill="#FFE45C" stroke="#141414" stroke-width="1"/><path d="M5 14 H13" stroke="#141414" stroke-width="1.4" stroke-linecap="round"/><rect x="2" y="0" width="14" height="9" rx="3" fill="#141414"/></g></svg>';
+
+  // Small arrows inside the round pointer over the course books.
   const ARROW = {
     back: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
     next: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
@@ -244,125 +254,39 @@ var Motion = (() => {
   };
 
   // =============================================================================
-  // The pointer's look: a small drop of liquid glass, like Apple's. It bends and
-  // brightens what is under it, with a light rim and a soft shadow, and a tiny ink dot
-  // marks the exact mouse position. Over a button the glass stretches into the
-  // button's shape. Over the books it is a solid ink circle with an arrow (yellow for
-  // "open"). The trail is white with "difference" blending, so it shows on any colour.
+  // The pointer, and what the highlighter does to the thing under it: tabs and side
+  // links get a yellow highlighter stroke behind their words, plain buttons turn
+  // light yellow, and filled buttons lift a little. Only while this pointer is on.
   // =============================================================================
   const CSS = `
     html.mx-cursor :where(body, body *:not(input, textarea, select, [contenteditable=true], canvas:not(.mx-trail), iframe, video, [data-native-cursor], [data-native-cursor] *)) { cursor: none !important; }
-    .mx-cur { position: fixed; left: 0; top: 0; width: 44px; height: 44px; border-radius: 999px; box-sizing: border-box;
-      display: grid; place-items: center; color: transparent; overflow: hidden; pointer-events: none; z-index: 2147483000;
-      background: rgba(251, 250, 246, .10);
-      -webkit-backdrop-filter: blur(.6px) saturate(1.7) brightness(1.06); backdrop-filter: var(--mx-glass, blur(.6px) saturate(1.7) brightness(1.06));
-      box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, .95), inset 0 -1px 1px rgba(255, 255, 255, .45), inset 0 0 0 .6px rgba(255, 255, 255, .75),
-        inset 0 0 14px rgba(255, 255, 255, .28), 0 12px 28px -12px rgba(20, 20, 20, .45), 0 1px 2px rgba(20, 20, 20, .14);
-      will-change: transform, width, height; transition: background-color .25s, opacity .2s, color .2s, box-shadow .25s; }
-    .mx-cur::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-      background: radial-gradient(circle at var(--mx, 35%) var(--my, 28%), rgba(255, 255, 255, .55), rgba(255, 255, 255, 0) 55%); mix-blend-mode: soft-light; }
-    .mx-cur.ring { background: rgba(251, 250, 246, .06); }
-    .mx-cur.solid, .mx-cur.open { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: 0 8px 24px rgba(20, 20, 20, .25); }
-    .mx-cur.solid { background: #141414; color: #F3F0E8; }
-    .mx-cur.open { background: #FFE45C; color: #141414; }
-    .mx-cur.solid::after, .mx-cur.open::after { display: none; }
-    .mx-pin { position: fixed; left: 0; top: 0; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #fff;
-      mix-blend-mode: difference; pointer-events: none; z-index: 2147483001; transition: opacity .2s; }
-    .mx-pin.off { opacity: 0; }
-    .mx-cur.hide, .mx-cur.hide + .mx-pin, html:not(.mx-cursor) :is(.mx-cur, .mx-pin, .mx-trail) { opacity: 0; }
-    .mx-trail { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 2147482999; mix-blend-mode: difference; }
+    .mx-pen { position: fixed; left: 0; top: 0; width: 0; height: 0; pointer-events: none; z-index: 2147483001; will-change: transform; transition: opacity .2s; }
+    .mx-pen svg { position: absolute; left: 0; top: 0; overflow: visible; transform-origin: 0 0; filter: drop-shadow(0 3px 4px rgba(20, 20, 20, .18));
+      transition: transform .34s cubic-bezier(.34, 1.4, .5, 1), opacity .18s ease; }
+    .mx-pen .mx-marker { opacity: 0; transform: rotate(40deg) scale(.55); }
+    .mx-pen.hl .mx-marker { opacity: 1; transform: rotate(-6deg) scale(1.1); }
+    .mx-pen.hl .mx-pencil { opacity: 0; transform: rotate(-40deg) scale(.55); }
+    .mx-ball { position: fixed; left: 0; top: 0; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; display: grid; place-items: center;
+      background: #141414; color: #F3F0E8; box-shadow: 0 8px 24px rgba(20, 20, 20, .25); pointer-events: none; z-index: 2147483001;
+      opacity: 0; scale: .6; transition: opacity .18s ease, scale .25s cubic-bezier(.23, 1, .32, 1), background-color .2s, color .2s; }
+    .mx-ball.on { opacity: 1; scale: 1; }
+    .mx-ball.open { background: #FFE45C; color: #141414; }
+    .mx-pen.hide, .mx-ball.hide, html:not(.mx-cursor) :is(.mx-pen, .mx-ball, .mx-trail) { opacity: 0; }
+    .mx-trail { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 2147483000; }
     .sx-on .mx-wave .ch { animation: mx-wave 520ms cubic-bezier(.23, 1, .32, 1) both; animation-delay: calc(min(var(--i), 30) * 18ms); }
     @keyframes mx-wave { 40% { transform: translateY(-0.09em) rotate(calc(var(--r) * .35)); } to { transform: none; } }
-    :is(h1, h2, .course-title) .serif { background-image: linear-gradient(currentColor, currentColor); background-repeat: no-repeat;
-      background-size: 0% .055em; background-position: 0 94%; -webkit-box-decoration-break: clone; box-decoration-break: clone;
-      transition: background-size .5s cubic-bezier(.23, 1, .32, 1); }
-    [dir=rtl] :is(h1, h2, .course-title) .serif { background-position: 100% 94%; }
-    :is(h1, h2, .course-title):hover .serif { background-size: 100% .055em; }`;
-
-  // =============================================================================
-  // The lens that makes the glass bend what is behind it (Chrome and Edge only; other
-  // browsers get the same glass without the bending). For the glass's current shape we
-  // draw a small picture that tells each point where to look: near the rim it looks a
-  // little further in, so the edge seems to curve like a drop of water, and the middle
-  // magnifies slightly. The picture is redrawn when the glass changes shape.
-  // =============================================================================
-  function addLens() {
-    if (!navigator.userAgentData?.brands?.some((b) => /Chrom/.test(b.brand)))
-      return null;
-    const SCALE = 28,
-      RIM = 14,
-      PULL = 9,
-      MAG = 0.07;
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("width", "0");
-    svg.setAttribute("height", "0");
-    svg.setAttribute("aria-hidden", "true");
-    svg.style.position = "absolute";
-    svg.innerHTML = `<filter id="mx-lens" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" x="0" y="0" width="44" height="44" color-interpolation-filters="sRGB">
-      <feImage x="0" y="0" width="44" height="44" preserveAspectRatio="none" result="map"/>
-      <feDisplacementMap in="SourceGraphic" in2="map" scale="${SCALE}" xChannelSelector="R" yChannelSelector="G"/></filter>`;
-    document.body.appendChild(svg);
-    const filter = svg.querySelector("filter"),
-      image = svg.querySelector("feImage");
-    const c = document.createElement("canvas"),
-      g = c.getContext("2d");
-
-    // Draws the lens picture for a rounded rectangle w × h with corner radius r.
-    function draw(w, h, r) {
-      const cw = Math.max(2, Math.round(w / 2)),
-        ch = Math.max(2, Math.round(h / 2));
-      c.width = cw;
-      c.height = ch;
-      const img = g.createImageData(cw, ch),
-        hw = w / 2,
-        hh = h / 2;
-      r = Math.min(r, hw, hh);
-      for (let y = 0; y < ch; y++)
-        for (let x = 0; x < cw; x++) {
-          const px = ((x + 0.5) / cw) * w - hw,
-            py = ((y + 0.5) / ch) * h - hh;
-          // How far this point is from the edge, and which way is "out".
-          const qx = Math.abs(px) - (hw - r),
-            qy = Math.abs(py) - (hh - r);
-          let nx, ny, dist;
-          if (qx > 0 && qy > 0) {
-            const l = Math.hypot(qx, qy) || 1;
-            nx = qx / l;
-            ny = qy / l;
-            dist = r - l;
-          } else if (qx > qy) {
-            nx = 1;
-            ny = 0;
-            dist = r - qx;
-          } else {
-            nx = 0;
-            ny = 1;
-            dist = r - qy;
-          }
-          nx *= Math.sign(px) || 1;
-          ny *= Math.sign(py) || 1;
-          const k = Math.pow(Math.max(0, 1 - dist / RIM), 2);
-          const ox = -nx * k * PULL - px * MAG,
-            oy = -ny * k * PULL - py * MAG;
-          const i = (y * cw + x) * 4;
-          img.data[i] = 128 + (ox / SCALE) * 255;
-          img.data[i + 1] = 128 + (oy / SCALE) * 255;
-          img.data[i + 2] = 128;
-          img.data[i + 3] = 255;
-        }
-      g.putImageData(img, 0, 0);
-      image.setAttribute("href", c.toDataURL());
-      for (const el of [filter, image]) {
-        el.setAttribute("width", w.toFixed(0));
-        el.setAttribute("height", h.toFixed(0));
-      }
-    }
-    document.documentElement.style.setProperty(
-      "--mx-glass",
-      "url(#mx-lens) blur(.35px) saturate(1.7) brightness(1.06)",
-    );
-    return draw;
-  }
+    html.mx-cursor :is(.tabs button, .subtabs a) { background: linear-gradient(#FFE45C, #FFE45C) no-repeat 0 66% / 0% 32%; transition: background-size .35s cubic-bezier(.23, 1, .32, 1), color .2s; }
+    html.mx-cursor[dir=rtl] :is(.tabs button, .subtabs a), html.mx-cursor [dir=rtl] :is(.tabs button, .subtabs a) { background-position: 100% 66%; }
+    html.mx-cursor :is(.tabs button, .subtabs a):hover { background-size: 100% 32%; color: #141414; }
+    html.mx-cursor :is(.side-nav a, .side-course):not([aria-current="page"]) { background-image: linear-gradient(#FFF3B0, #FFF3B0); background-repeat: no-repeat; background-position: 0 0; background-size: 0% 100%;
+      transition: background-size .35s cubic-bezier(.23, 1, .32, 1), background-color .2s; }
+    html.mx-cursor[dir=rtl] :is(.side-nav a, .side-course), html.mx-cursor [dir=rtl] :is(.side-nav a, .side-course) { background-position: 100% 0; }
+    html.mx-cursor :is(.side-nav a, .side-course):not([aria-current="page"]):hover { background-color: transparent; background-size: 100% 100%; }
+    html.mx-cursor :is(.btn:not(.btn-primary, .btn-dark, .btn-accent, .btn-hl, .btn-destructive, [aria-pressed="true"]), .round-btn:not(.fill), .icon-btn, .side-me, .code-btn):hover:not(:disabled) { background-color: #FFF3B0; }
+    html.mx-cursor .btn:not(.btn-primary, .btn-dark, .btn-accent, .btn-hl, .btn-destructive, [aria-pressed="true"]):hover:not(:disabled) { border-color: #141414; }
+    html.mx-cursor :is(.btn-primary, .btn-dark, .btn-accent, .btn-hl, .btn-destructive, .round-btn.fill):hover:not(:disabled) { translate: 0 -2px; box-shadow: 0 10px 22px -10px rgba(20, 20, 20, .5); }
+    html.mx-cursor .btn-accent:hover:not(:disabled) { box-shadow: 0 10px 22px -10px rgba(36, 64, 230, .7); }
+    html.mx-cursor :is(.btn, .round-btn) { transition: background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .25s ease, translate .25s cubic-bezier(.23, 1, .32, 1), transform .16s cubic-bezier(.23, 1, .32, 1); }`;
 
   // =============================================================================
   // Starts the pointer once the page is ready.
@@ -373,35 +297,34 @@ var Motion = (() => {
     const style = document.createElement("style");
     style.textContent = CSS;
     document.head.appendChild(style);
-    const cur = document.createElement("div");
-    cur.className = "mx-cur";
-    cur.setAttribute("aria-hidden", "true");
+    const pen = document.createElement("div");
+    pen.className = "mx-pen";
+    pen.setAttribute("aria-hidden", "true");
+    pen.innerHTML = PENCIL + MARKER;
+    const ball = document.createElement("div");
+    ball.className = "mx-ball";
+    ball.setAttribute("aria-hidden", "true");
     const trail = document.createElement("canvas");
     trail.className = "mx-trail";
     trail.setAttribute("aria-hidden", "true");
-    const pin = document.createElement("div");
-    pin.className = "mx-pin";
-    pin.setAttribute("aria-hidden", "true");
-    document.body.append(trail, cur, pin);
-    const fitLens = addLens();
-    let lensW = 0,
-      lensH = 0;
+    document.body.append(trail, pen, ball);
     const ctx = trail.getContext("2d");
     const root = document.documentElement;
     root.classList.add("mx-cursor");
 
-    // Where the mouse is, what is under it, and the pointer's current shape (it eases
-    // toward its target shape every frame). The trail is the pointer's last positions.
+    // Where the mouse is, whether it is near something clickable, which arrow to show
+    // over a book, and the pointer's last positions (for the line behind it).
     let mx = -100,
       my = -100,
-      over = null,
-      book = null,
-      leaning = null,
+      lastX = -100,
+      tilt = 0,
       raf = 0,
-      first = true,
-      icon = "";
-    const now = { x: -100, y: -100, w: 44, h: 44, r: 22 },
-      points = [];
+      near = false,
+      book = null,
+      icon = "",
+      last = null,
+      leaveT = 0;
+    const points = [];
 
     // Sizes the trail canvas to the window, sharp on high-resolution screens.
     function size() {
@@ -413,75 +336,78 @@ var Motion = (() => {
     size();
     addEventListener("resize", size);
 
-    // The shape the pointer is heading for: a dot at the mouse, a round arrow over a
-    // book, or the shape of the button under the mouse.
-    function target() {
-      if (book)
-        return { x: mx - 26, y: my - 26, w: 52, h: 52, r: 26, kind: book };
-      if (over && over.isConnected) {
-        const box = shapeOf(over);
-        if (box) {
-          const { b, pad, radius } = box,
-            cx = b.left + b.width / 2,
-            cy = b.top + b.height / 2;
-          const ox = Math.max(-3, Math.min(3, (mx - cx) * 0.06)),
-            oy = Math.max(-3, Math.min(3, (my - cy) * 0.06));
-          const h = b.height + pad * 2;
-          return {
-            x: b.left - pad + ox,
-            y: b.top - pad + oy,
-            w: b.width + pad * 2,
-            h,
-            r: Math.min(radius + pad, h / 2),
-            kind: "ring",
-          };
-        }
-        return { x: mx - 28, y: my - 28, w: 56, h: 56, r: 28, kind: "ring" };
+    // True when (x, y) is on a highlighted word (exactly on it: the words next to it keep
+    // the pencil), or on a clickable thing, or close enough to the last one: a few
+    // pixels around it, or the gap between it and its neighbours in the same row (tabs,
+    // a row of buttons). In a column, like the side menu, only the links themselves count.
+    const around = (r, x, y) =>
+      x > r.left - PAD_X &&
+      x < r.right + PAD_X &&
+      y > r.top - PAD_Y &&
+      y < r.bottom + PAD_Y;
+    function isNear(el, x, y) {
+      if (el?.closest(MARKED)) {
+        last = null;
+        return true;
       }
-      return { x: mx - 22, y: my - 22, w: 44, h: 44, r: 22, kind: "" };
+      const on = el?.closest(CLICKABLE);
+      if (on) {
+        last = on;
+        return true;
+      }
+      if (!last || !last.isConnected) return false;
+      const b = last.getBoundingClientRect();
+      if (around(b, x, y)) return true;
+      const row = last.parentElement,
+        cs = row && getComputedStyle(row);
+      if (
+        !cs ||
+        !cs.display.includes("flex") ||
+        cs.flexDirection.startsWith("column")
+      )
+        return false;
+      const r = row.getBoundingClientRect();
+      return (
+        x > r.left && x < r.right && y > b.top - PAD_Y && y < b.bottom + PAD_Y
+      );
     }
 
-    // The outline to wrap around something clickable. A button with its own background
-    // or border is wrapped as it is drawn. A plain text link or tab is wrapped tightly
-    // around its words, not around its (larger) clickable area. Anything very big gets
-    // a round pointer instead (null).
-    function shapeOf(el) {
-      const cs = getComputedStyle(el);
-      const boxed =
-        (cs.backgroundColor !== "rgba(0, 0, 0, 0)" &&
-          cs.backgroundColor !== "transparent") ||
-        parseFloat(cs.borderTopWidth) > 0 ||
-        parseFloat(cs.borderBottomWidth) > 0;
-      let b = el.getBoundingClientRect(),
-        pad = 6,
-        radius = parseFloat(cs.borderTopLeftRadius) || 0;
-      if (!boxed) {
-        const range = document.createRange();
-        range.selectNodeContents(el);
-        const t = range.getBoundingClientRect();
-        if (t.width && t.height) {
-          b = t;
-          pad = 6;
-          radius = 8;
+    // Turns the highlighter on at once, and off only after a short moment, so sliding
+    // quickly from one button to the next never flashes the pencil.
+    function setNear(v) {
+      if (v) {
+        clearTimeout(leaveT);
+        leaveT = 0;
+        if (!near) {
+          near = true;
+          pen.classList.add("hl");
         }
+        return;
       }
-      return b.width < 420 && b.height < 160 ? { b, pad, radius } : null;
+      if (!near || leaveT) return;
+      leaveT = setTimeout(() => {
+        leaveT = 0;
+        near = false;
+        pen.classList.remove("hl");
+        wake();
+      }, 180);
     }
 
-    // Draws the trail: a thin line through the pointer's last positions that gets
-    // thinner and fainter toward its end, and is gone after a fifth of a second.
+    // Draws the line behind the pointer: thin graphite for the pencil, a wider yellow
+    // stroke for the highlighter. It thins and fades within a fifth of a second.
     function drawTrail(t) {
       ctx.clearRect(0, 0, innerWidth, innerHeight);
-      while (points.length && t - points[0].t > 200) points.shift();
-      if (points.length < 2) return false;
+      while (points.length && t - points[0].t > 220) points.shift();
+      if (points.length < 2) return points.length > 0;
       ctx.lineCap = "round";
+      const col = near ? "230, 196, 30" : "20, 20, 20";
       for (let i = 1; i < points.length; i++) {
         const a = points[i - 1],
           b = points[i],
           k = i / points.length,
-          age = 1 - (t - b.t) / 200;
-        ctx.strokeStyle = `rgba(255, 255, 255, ${(0.55 * k * age).toFixed(3)})`;
-        ctx.lineWidth = 1 + 5 * k * age;
+          age = 1 - (t - b.t) / 220;
+        ctx.strokeStyle = `rgba(${col}, ${((near ? 0.6 : 0.35) * k * age).toFixed(3)})`;
+        ctx.lineWidth = near ? 3 + 7 * k * age : 0.6 + 3 * k * age;
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
@@ -490,74 +416,35 @@ var Motion = (() => {
       return true;
     }
 
-    // Moves the pointer one step toward its target shape, draws the trail, and leans
-    // the button a little toward the mouse.
+    // One frame: place the pen (leaning a little with the mouse's speed), the round
+    // arrow over the books, and the line behind.
     function frame(t) {
-      const tg = target(),
-        k = first ? 1 : 0.28;
-      first = false;
-      let moving = false;
-      for (const key of ["x", "y", "w", "h", "r"]) {
-        now[key] += (tg[key] - now[key]) * k;
-        if (Math.abs(tg[key] - now[key]) > 0.2) moving = true;
-      }
-      cur.style.transform = `translate(${now.x.toFixed(1)}px, ${now.y.toFixed(1)}px)`;
-      cur.style.width = now.w.toFixed(1) + "px";
-      cur.style.height = now.h.toFixed(1) + "px";
-      cur.style.borderRadius = now.r.toFixed(1) + "px";
-      // The lens is redrawn when the glass has changed shape by a few pixels, and once
-      // more when it settles.
-      const settled = !moving && (now.w !== lensW || now.h !== lensH);
-      if (
-        fitLens &&
-        (settled || Math.abs(now.w - lensW) > 3 || Math.abs(now.h - lensH) > 3)
-      ) {
-        lensW = now.w;
-        lensH = now.h;
-        fitLens(lensW, lensH, now.r);
-      }
-      cur.classList.toggle("ring", tg.kind === "ring");
-      pin.classList.toggle(
-        "off",
-        tg.kind === "back" || tg.kind === "next" || tg.kind === "open",
-      );
-      pin.style.transform = `translate(${mx}px, ${my}px)`;
-      // The light on the glass sits up and to the side of the mouse, so it moves with it.
-      cur.style.setProperty("--mx", (mx - now.x - 6).toFixed(0) + "px");
-      cur.style.setProperty("--my", (my - now.y - 8).toFixed(0) + "px");
-      cur.classList.toggle("solid", tg.kind === "back" || tg.kind === "next");
-      cur.classList.toggle("open", tg.kind === "open");
-      const want = ARROW[tg.kind] || "";
+      const vx = mx - lastX;
+      lastX = mx;
+      tilt += (Math.max(-22, Math.min(22, vx * 2.2)) - tilt) * 0.2;
+      pen.style.transform = `translate(${mx}px, ${my}px) rotate(${(-tilt * 0.5).toFixed(1)}deg)`;
+      ball.style.transform = `translate(${mx}px, ${my}px)`;
+      const want = ARROW[book] || "";
       if (want !== icon) {
         icon = want;
-        cur.innerHTML = want;
+        ball.innerHTML = want;
       }
-      if (!tg.kind && moving)
-        points.push({ x: now.x + now.w / 2, y: now.y + now.h / 2, t });
+      ball.classList.toggle("on", !!book);
+      ball.classList.toggle("open", book === "open");
+      pen.classList.toggle("hide", !!book || pen.dataset.native === "1");
+      const prev = points[points.length - 1];
+      if (
+        !book &&
+        pen.dataset.native !== "1" &&
+        (!prev || Math.hypot(mx - prev.x, my - prev.y) > 0.5)
+      )
+        points.push({ x: mx, y: my, t });
       const tail = drawTrail(t);
-      if (leaning) {
-        const b = leaning.getBoundingClientRect();
-        const lx = Math.max(
-            -3,
-            Math.min(3, (mx - b.left - b.width / 2) * 0.06),
-          ),
-          ly = Math.max(-3, Math.min(3, (my - b.top - b.height / 2) * 0.06));
-        leaning.style.translate = `${lx.toFixed(1)}px ${ly.toFixed(1)}px`;
-      }
-      raf = moving || tail || over ? requestAnimationFrame(frame) : 0;
+      raf = tail || Math.abs(tilt) > 0.3 ? requestAnimationFrame(frame) : 0;
     }
     const wake = () => {
       if (!raf) raf = requestAnimationFrame(frame);
     };
-
-    // Lets go of the button the pointer was wrapped around.
-    function release() {
-      if (leaning) {
-        leaning.style.translate = "";
-        leaning = null;
-      }
-      over = null;
-    }
 
     // Which arrow to show over a course book: back for a book on the left, next for a
     // book on the right, open for the book in front.
@@ -590,69 +477,72 @@ var Motion = (() => {
       "pointermove",
       (e) => {
         if (e.pointerType !== "mouse") return;
+        if (mx < -50) lastX = e.clientX;
         mx = e.clientX;
         my = e.clientY;
-        // While a dialog is open the custom pointer steps aside (a dialog always sits on
-        // top of everything, so the dot could not show above it).
+        // While a dialog is open the normal pointer is used (a dialog always sits on top
+        // of everything, so the pencil could not show above it).
         const modal = document.querySelector("dialog[open]");
         root.classList.toggle("mx-cursor", !modal);
         if (modal) {
-          release();
           book = null;
+          setNear(false);
           return;
         }
         const el = e.target instanceof Element ? e.target : null;
-        const native = el?.closest(NATIVE);
-        cur.classList.toggle("hide", !!native);
+        const native = !!el?.closest(NATIVE);
+        pen.dataset.native = native ? "1" : "";
         book = native ? null : bookKind(el);
-        const hit = native || book ? null : el?.closest(CLICKABLE) || null;
-        if (hit !== over) {
-          release();
-          over = hit;
-          if (hit && hit.matches(LEAN)) leaning = hit;
-        }
+        setNear(!native && !book && isNear(el, mx, my));
         wave(el);
         wake();
       },
       { passive: true },
     );
-    addEventListener("scroll", wake, { passive: true });
+    addEventListener(
+      "scroll",
+      () => {
+        if (last && !last.isConnected) last = null;
+      },
+      { passive: true },
+    );
     document.addEventListener("pointerleave", () => {
-      cur.classList.add("hide");
-      release();
+      pen.classList.add("hide");
+      ball.classList.remove("on");
       book = null;
+      points.length = 0;
       wake();
     });
     document.addEventListener("pointerenter", () =>
-      cur.classList.remove("hide"),
+      pen.classList.remove("hide"),
     );
-    addEventListener("pointerdown", () => {
-      if (!over)
-        cur.animate([{ scale: 1 }, { scale: 0.85 }, { scale: 1 }], {
-          duration: 240,
+    // A small press when clicking, like putting the pen down on the paper.
+    addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" && !book)
+        pen.animate([{ scale: 1 }, { scale: 0.88 }, { scale: 1 }], {
+          duration: 220,
           easing: "cubic-bezier(.23, 1, .32, 1)",
         });
     });
     // When the page changes, the pointer is hidden first, so it is not caught in the
     // picture of the old page that slides away (and does not jump on the new one).
     const away = () => {
-      cur.style.display = pin.style.display = trail.style.display = "none";
-      release();
+      pen.style.display = ball.style.display = trail.style.display = "none";
     };
     addEventListener("pageswap", away);
     addEventListener("pagehide", away);
     addEventListener("pageshow", (e) => {
       if (e.persisted)
-        cur.style.display = pin.style.display = trail.style.display = "";
+        pen.style.display = ball.style.display = trail.style.display = "";
     });
     // The moment a dialog opens the normal pointer comes back, and when it closes the
-    // custom pointer returns.
+    // pencil returns.
     new MutationObserver(() => {
       const open = !!document.querySelector("dialog[open]");
       root.classList.toggle("mx-cursor", !open);
       if (open) {
-        release();
         book = null;
+        setNear(false);
       }
     }).observe(document.body, {
       subtree: true,
