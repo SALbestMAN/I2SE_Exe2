@@ -90,7 +90,7 @@
           aria-label="Your courses"
         ></section>
         <div class="shelf-bar center">
-          <div class="shelf-nav">
+          <div class="shelf-nav" style="direction: ltr">
             <button
               class="round-btn"
               id="prev"
@@ -138,9 +138,9 @@
         // =============================================================================
         const panel = $("#panel");
         $("#prev").innerHTML =
-          `<span class="flip" style="display:flex">${icon("back", 18, "currentColor", 2.2)}</span>`;
+          `<span style="display:flex">${icon("back", 18, "currentColor", 2.2)}</span>`;
         $("#next").innerHTML =
-          `<span class="flip" style="display:flex;transform:rotate(180deg)">${icon("back", 18, "currentColor", 2.2)}</span>`;
+          `<span style="display:flex;transform:rotate(180deg)">${icon("back", 18, "currentColor", 2.2)}</span>`;
 
         // =============================================================================
         // The shelf of course books. When another book comes to the front, the panel shows
