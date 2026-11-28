@@ -38,3 +38,19 @@ flowchart LR
 | UC-09 | As a shy student, I want to ask without my name and upvote other questions, so the lecturer answers what most people want to know. | My question shows without my name, and the list is sorted by upvotes. | REQ-11 |
 | UC-10 | As a lecturer, I want to paste the Zoom link after class and share an AI summary, so students can catch up. | With a Zoom transcript, the summary is ready in about a minute and I can share it. | REQ-13 |
 | UC-11 | As a lecturer, I want an AI review of each homework and a warning about copied work. | I click Review all. Each student gets a score based on the assignment's requirements, and similar pairs are flagged. | REQ-14 |
+
+## UC-01 Check in
+
+**Who:** a student.
+**Before:** the student is signed in and on the course list. The lecturer has started the lecture and opened attendance.
+**After:** the student has an attendance record for this lecture. If the scan failed, a blocked attempt is saved with the reason.
+
+1. The student taps **Check in**.
+2. The camera opens and the server notes the time the scan began.
+3. The phone measures its connection speed, so a slow network gets a little more time.
+4. The student holds the phone on the projector. The phone reads at least 6 frames in about 2 seconds.
+5. If the lecture checks location, the phone asks for it.
+6. The phone sends the frames, their timing and the location to the database.
+7. The database runs every check and saves the result.
+8. The phone shows a tick for each check, and the count on the projector goes up.
+
