@@ -292,7 +292,7 @@
               $("#course-count"),
               `${semester()} · ${list.length} course${list.length === 1 ? "" : "s"}`,
             );
-            const w = list.map((c, i) => ({ ...c, cover: i }));
+            const w = list.map((c, i) => ({ ...c, cover: c.cover ?? i }));
             shelf.set(w);
             return;
           }
@@ -302,7 +302,7 @@
               ? `${semester()} · ${list.length} course${list.length === 1 ? "" : "s"} · ${students} student${students === 1 ? "" : "s"}`
               : `${semester()} · an empty shelf`,
           );
-          const withCover = list.map((c, i) => ({ ...c, cover: i }));
+          const withCover = list.map((c, i) => ({ ...c, cover: c.cover ?? i }));
           shelf.set(withCover);
           sideCourses(withCover);
         }
